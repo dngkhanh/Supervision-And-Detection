@@ -1,0 +1,39 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: my-project-cluster
+  region: ap-southeast-1
+  version: "1.30"
+
+iam:
+  withOIDC: true
+
+managedNodeGroups:
+  # --- NHÓM 1: VIP (Scale Node thoải mái) ---
+  # Dành cho: api-gateway, user, recomend
+  - name: scalable-ng
+    instanceType: t3.medium  # 2 vCPU, 4 GiB RAM
+    minSize: 3               # Bắt đầu với 3 node (cho 3 service)
+    maxSize: 5              # Cho phép tăng lên tới 5 node
+    desiredCapacity: 3
+    labels:
+      type: scalable         # Nhãn để Service VIP tìm nhà
+    iam:
+      withAddonPolicies:
+        imageBuilder: true
+        autoScaler: true     # BẬT Auto Scaler
+
+  # --- NHÓM 2: CỐ ĐỊNH (Không Scale Node) ---
+  # Dành cho: application, job
+  - name: fixed-ng
+    instanceType: t3.medium
+    minSize: 2               # Bắt đầu với 2 node (cho 2 service)
+    maxSize: 2               # KHÓA CỨNG: Không bao giờ tăng quá 2 node
+    desiredCapacity: 2
+    labels:
+      type: fixed            # Nhãn để Service Thường tìm nhà
+    iam:
+      withAddonPolicies:
+        imageBuilder: true
+        autoScaler: false    # TẮT Auto Scaler

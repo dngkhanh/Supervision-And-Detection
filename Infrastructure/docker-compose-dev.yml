@@ -1,0 +1,81 @@
+version: "3.8"
+
+services:
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: dockerfile
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./api-gateway:/app
+      - /app/node_modules
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+    depends_on:
+      - user-service
+      - job-service
+      - application-service
+      - recommend-service
+
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./user-service:/app
+      - /app/node_modules
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+
+  job-service:
+    build:
+      context: ./job-service
+      dockerfile: dockerfile
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./job-service:/app
+      - /app/node_modules
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+
+  application-service:
+    build:
+      context: ./application-service
+      dockerfile: dockerfile
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./application-service:/app
+      - /app/node_modules
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+
+  recommend-service:
+    build:
+      context: ./recommend-service
+      dockerfile: dockerfile
+    ports:
+      - "3004:3004"
+    volumes:
+      - ./recommend-service:/app
+      - /app/node_modules
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - TZ=Asia/Ho_Chi_Minh

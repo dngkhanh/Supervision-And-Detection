@@ -1,0 +1,335 @@
+# ==========================================================
+# PHẦN 1: NHÓM VIP (SCALABLE NODE)
+# Gồm: API Gateway (3000), User (3001), Recommend (3004)
+# ==========================================================
+
+# --- 1. API GATEWAY ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      nodeSelector:
+        type: scalable
+      containers:
+      - name: api-gateway
+        image: 088097975812.dkr.ecr.ap-southeast-1.amazonaws.com/api-gateway:latest
+        ports:
+        - containerPort: 3000
+        # QUAN TRỌNG: Lấy biến môi trường từ Secret
+        envFrom:
+        - secretRef:
+            name: api-gateway-secret
+        resources:
+          requests:
+            cpu: "600m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+spec:
+  type: LoadBalancer # Để public ra ngoài internet
+  selector:
+    app: api-gateway
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+
+# --- 2. USER SERVICE ---
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user
+  template:
+    metadata:
+      labels:
+        app: user
+    spec:
+      nodeSelector:
+        type: scalable
+      containers:
+      - name: user
+        image: 088097975812.dkr.ecr.ap-southeast-1.amazonaws.com/user-service:latest
+        ports:
+        - containerPort: 3001
+        envFrom:
+        - secretRef:
+            name: user-service-secret
+        resources:
+          requests:
+            cpu: "600m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+spec:
+  selector:
+    app: user
+  ports:
+    - protocol: TCP
+      port: 3001
+      targetPort: 3001
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-service
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+
+# --- 3. RECOMMEND SERVICE ---
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommend-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: recommend
+  template:
+    metadata:
+      labels:
+        app: recommend
+    spec:
+      nodeSelector:
+        type: scalable
+      containers:
+      - name: recommend
+        image: 088097975812.dkr.ecr.ap-southeast-1.amazonaws.com/recommend-service:latest
+        ports:
+        - containerPort: 3004
+        envFrom:
+        - secretRef:
+            name: recommend-service-secret
+        resources:
+          requests:
+            cpu: "600m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommend-service
+spec:
+  selector:
+    app: recommend
+  ports:
+    - protocol: TCP
+      port: 3004
+      targetPort: 3004
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: recommend-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: recommend-service
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+
+# ==========================================================
+# PHẦN 2: NHÓM THƯỜNG (FIXED NODE)
+# Gồm: Job (3002), Application (3003)
+# ==========================================================
+
+# --- 4. JOB SERVICE ---
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: job-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: job
+  template:
+    metadata:
+      labels:
+        app: job
+    spec:
+      nodeSelector:
+        type: fixed
+      containers:
+      - name: job
+        image: 088097975812.dkr.ecr.ap-southeast-1.amazonaws.com/job-service:latest
+        ports:
+        - containerPort: 3002
+        envFrom:
+        - secretRef:
+            name: job-service-secret
+        resources:
+          requests:
+            cpu: "300m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: job-service
+spec:
+  selector:
+    app: job
+  ports:
+    - protocol: TCP
+      port: 3002
+      targetPort: 3002
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: job-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: job-service
+  minReplicas: 2
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+# --- 5. APPLICATION SERVICE ---
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: application-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: application
+  template:
+    metadata:
+      labels:
+        app: application
+    spec:
+      nodeSelector:
+        type: fixed
+      containers:
+      - name: application
+        image: 088097975812.dkr.ecr.ap-southeast-1.amazonaws.com/application-service:latest
+        ports:
+        - containerPort: 3003
+        envFrom:
+        - secretRef:
+            name: application-service-secret
+        resources:
+          requests:
+            cpu: "300m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: application-service
+spec:
+  selector:
+    app: application
+  ports:
+    - protocol: TCP
+      port: 3003
+      targetPort: 3003
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: application-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: application-service
+  minReplicas: 2
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target: 
+        type: Utilization
+        averageUtilization: 70
