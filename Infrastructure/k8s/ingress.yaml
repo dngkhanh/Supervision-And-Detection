@@ -1,0 +1,43 @@
+# =============================================================
+# INGRESS — Azure AKS (Production)
+# Option A (recommended): NGINX Ingress Controller cài qua Helm
+#   helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+#   helm install ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace
+#
+# Option B: Application Gateway Ingress Controller (AGIC) — tích hợp Azure Application Gateway
+#   Cài qua AKS add-on: az aks enable-addons --addons ingress-appgw
+#
+# TLS: dùng cert-manager + Let's Encrypt hoặc upload cert lên Azure Key Vault
+# =============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: supervision-ingress
+  namespace: supervision-dev
+  labels:
+    environment: azure
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    # HTTPS redirect — bỏ comment nếu chưa có TLS
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx   # nginx-ingress Helm chart; dùng "azure/application-gateway" nếu dùng AGIC
+  rules:
+  - host: supervision.yourdomain.com   # Đổi thành domain thực của bạn
+    http:
+      paths:
+      # Tất cả traffic → api-gateway, gateway tự route đến service phù hợp.
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 3000
+  # TLS: bỏ comment sau khi có cert
+  # tls:
+  # - hosts:
+  #   - supervision.yourdomain.com
+  #   secretName: supervision-tls-secret

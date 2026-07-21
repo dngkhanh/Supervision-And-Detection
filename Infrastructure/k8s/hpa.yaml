@@ -1,0 +1,118 @@
+# =============================================================
+# HPA — Horizontal Pod Autoscaler — Local (Minikube)
+# Yêu cầu: minikube addons enable metrics-server
+#
+# Kiểm tra: kubectl get hpa -n supervision-dev
+# Test scale: kubectl run -it --rm load-generator \
+#   --image=busybox -n supervision-dev -- \
+#   /bin/sh -c "while true; do wget -q -O- http://api-gateway:3000/health; done"
+# =============================================================
+
+# --- 1. API GATEWAY HPA (nhóm vip — scale nhiều hơn) ---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway-hpa
+  namespace: supervision-dev
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+  minReplicas: 1            # Local: min 1 (production: 2)
+  maxReplicas: 3            # Local: max 3 (production: 5)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+
+---
+# --- 2. USER SERVICE HPA (nhóm vip) ---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-service-hpa
+  namespace: supervision-dev
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-service
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+
+---
+# --- 3. RECOMMEND SERVICE HPA (nhóm vip) ---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: recommend-service-hpa
+  namespace: supervision-dev
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: recommend-service
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+
+---
+# --- 4. JOB SERVICE HPA (nhóm standard — scale ít hơn) ---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: job-service-hpa
+  namespace: supervision-dev
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: job-service
+  minReplicas: 1
+  maxReplicas: 2            # Nhóm standard: max 2 (production: 3)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+# --- 5. APPLICATION SERVICE HPA (nhóm standard) ---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: application-service-hpa
+  namespace: supervision-dev
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: application-service
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

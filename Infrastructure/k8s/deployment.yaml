@@ -1,0 +1,314 @@
+# =============================================================
+# DEPLOYMENT — Azure AKS (Production)
+# Image pull từ ACR: <acr-name>.azurecr.io/<service>:latest
+# imagePullPolicy: Always  — AKS luôn pull từ ACR
+# replicas: 1 (HPA sẽ tự scale lên theo tải)
+# RabbitMQ: dùng cloud URL (CloudAMQP / Azure Service Bus), không deploy trong cluster
+# =============================================================
+
+# =============================================================
+# PHẦN 1: NHÓM VIP (api-gateway, user, recommend)
+# =============================================================
+
+# --- 1. API GATEWAY ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: supervision-dev
+  labels:
+    app: api-gateway
+    tier: vip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+        tier: vip
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+      - name: api-gateway
+        image: supervisionacr.azurecr.io/api-gateway:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: api-gateway-config
+        - secretRef:
+            name: api-gateway-secret
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+
+---
+# --- 2. USER SERVICE ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: supervision-dev
+  labels:
+    app: user-service
+    tier: vip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: user-service
+        tier: vip
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+      - name: user-service
+        image: supervisionacr.azurecr.io/user-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3001
+        envFrom:
+        - configMapRef:
+            name: user-service-config
+        - secretRef:
+            name: user-service-secret
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+
+---
+# --- 3. RECOMMEND SERVICE ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommend-service
+  namespace: supervision-dev
+  labels:
+    app: recommend-service
+    tier: vip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recommend-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: recommend-service
+        tier: vip
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+      - name: recommend-service
+        image: supervisionacr.azurecr.io/recommend-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3004
+        envFrom:
+        - configMapRef:
+            name: recommend-service-config
+        - secretRef:
+            name: recommend-service-secret
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3004
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3004
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+
+---
+# =============================================================
+# PHẦN 2: NHÓM THƯỜNG (job, application)
+# =============================================================
+
+# --- 4. JOB SERVICE ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: job-service
+  namespace: supervision-dev
+  labels:
+    app: job-service
+    tier: standard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: job-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: job-service
+        tier: standard
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+      - name: job-service
+        image: supervisionacr.azurecr.io/job-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3002
+        envFrom:
+        - configMapRef:
+            name: job-service-config
+        - secretRef:
+            name: job-service-secret
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "300m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+
+---
+# --- 5. APPLICATION SERVICE ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: application-service
+  namespace: supervision-dev
+  labels:
+    app: application-service
+    tier: standard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: application-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: application-service
+        tier: standard
+    spec:
+      serviceAccountName: backend-sa
+      containers:
+      - name: application-service
+        image: supervisionacr.azurecr.io/application-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3003
+        envFrom:
+        - configMapRef:
+            name: application-service-config
+        - secretRef:
+            name: application-service-secret
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "300m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3003
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3003
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3

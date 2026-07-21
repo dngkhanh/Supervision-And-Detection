@@ -1,0 +1,93 @@
+# =============================================================
+# SERVICE — Azure AKS (Production)
+# Tất cả dùng ClusterIP — Ingress Controller xử lý traffic từ ngoài
+# =============================================================
+
+# --- 1. API GATEWAY (ClusterIP — Ingress sẽ route tới đây) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: supervision-dev
+  labels:
+    app: api-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app: api-gateway
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+
+---
+# --- 2. USER SERVICE (ClusterIP — nội bộ) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: supervision-dev
+  labels:
+    app: user-service
+spec:
+  type: ClusterIP
+  selector:
+    app: user-service
+  ports:
+    - protocol: TCP
+      port: 3001
+      targetPort: 3001
+
+---
+# --- 3. JOB SERVICE (ClusterIP — nội bộ) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: job-service
+  namespace: supervision-dev
+  labels:
+    app: job-service
+spec:
+  type: ClusterIP
+  selector:
+    app: job-service
+  ports:
+    - protocol: TCP
+      port: 3002
+      targetPort: 3002
+
+---
+# --- 4. APPLICATION SERVICE (ClusterIP — nội bộ) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: application-service
+  namespace: supervision-dev
+  labels:
+    app: application-service
+spec:
+  type: ClusterIP
+  selector:
+    app: application-service
+  ports:
+    - protocol: TCP
+      port: 3003
+      targetPort: 3003
+
+---
+# --- 5. RECOMMEND SERVICE (ClusterIP — nội bộ) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommend-service
+  namespace: supervision-dev
+  labels:
+    app: recommend-service
+spec:
+  type: ClusterIP
+  selector:
+    app: recommend-service
+  ports:
+    - protocol: TCP
+      port: 3004
+      targetPort: 3004

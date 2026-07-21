@@ -1,0 +1,235 @@
+# =============================================================
+# NETWORK POLICY — Local (Minikube)
+# Yêu cầu: Minikube dùng CNI hỗ trợ NetworkPolicy
+#   minikube start --cni=calico
+#
+# Luồng traffic thực tế:
+#   Ingress → api-gateway → user/job/application/recommend
+#   application-service → job-service      (lấy chi tiết job)
+#   application-service → user-service     (lấy CV ứng viên)
+#   recommend-service   → job-service      (search_fill + home)
+#   job-service         → RabbitMQ Cloud   (publish — egress ra ngoài)
+#   recommend-service   → RabbitMQ Cloud   (consume — egress ra ngoài)
+#
+# Lưu ý:
+#   RabbitMQ chạy trên CLOUD (CloudAMQP / AWS MQ), không có Pod trong cluster.
+#   → Không dùng Ingress rule cho rabbitmq Pod (Pod không tồn tại trong cluster).
+#   → Dùng Egress rule để cho phép job-service và recommend-service gọi ra ngoài.
+# =============================================================
+
+# --- 1. Deny tất cả ingress mặc định trong namespace ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: supervision-dev
+spec:
+  podSelector: {}         # Áp dụng cho tất cả Pod
+  policyTypes:
+  - Ingress
+
+---
+# --- 2. API Gateway: nhận traffic từ Ingress Controller ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-api-gateway
+  namespace: supervision-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 3000
+
+---
+# --- 3. User Service: nhận traffic từ api-gateway VÀ application-service ---
+# application-service gọi user-service để lấy CV ứng viên (/user/cv/:user_id)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-user-service
+  namespace: supervision-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: user-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    - podSelector:
+        matchLabels:
+          app: application-service
+    ports:
+    - protocol: TCP
+      port: 3001
+
+---
+# --- 4. Job Service: nhận traffic từ api-gateway, application-service VÀ recommend-service ---
+# application-service gọi job-service để lấy chi tiết job (/job/:id)
+# recommend-service gọi job-service /job/home và /job/search_fill
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-job-service
+  namespace: supervision-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: job-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    - podSelector:
+        matchLabels:
+          app: application-service
+    - podSelector:
+        matchLabels:
+          app: recommend-service
+    ports:
+    - protocol: TCP
+      port: 3002
+
+---
+# --- 5. Application Service: chỉ nhận traffic từ api-gateway ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-application-service
+  namespace: supervision-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: application-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 3003
+
+---
+# --- 6. Recommend Service: chỉ nhận traffic từ api-gateway ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-recommend-service
+  namespace: supervision-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: recommend-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    ports:
+    - protocol: TCP
+      port: 3004
+
+---
+# --- 7. Egress: job-service → RabbitMQ Cloud (CloudAMQP / AWS MQ) ---
+# RabbitMQ chạy trên cloud, không có Pod trong cluster.
+# Cần Egress policy để job-service có thể gọi ra ngoài cluster.
+# Port 5671 = AMQPS (SSL), 5672 = AMQP (không mã hóa — fallback)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-job-egress-rabbitmq
+  namespace: supervision-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: job-service
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 5671   # AMQPS (SSL) — CloudAMQP / AWS MQ
+    - protocol: TCP
+      port: 5672   # AMQP (không mã hóa — fallback)
+  # Cho phép DNS resolution để resolve hostname RabbitMQ cloud
+  - ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# --- 8. Egress: recommend-service → RabbitMQ Cloud ---
+# recommend-service consume queue recommend_queue từ RabbitMQ cloud
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-recommend-egress-rabbitmq
+  namespace: supervision-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: recommend-service
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 5671   # AMQPS (SSL)
+    - protocol: TCP
+      port: 5672   # AMQP (fallback)
+  # Cho phép DNS resolution
+  - ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# --- 9. Monitoring: cho phép Prometheus scrape toàn bộ namespace ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-scrape
+  namespace: supervision-dev
+spec:
+  podSelector: {}           # Tất cả Pod trong namespace
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 3001
+    - protocol: TCP
+      port: 3002
+    - protocol: TCP
+      port: 3003
+    - protocol: TCP
+      port: 3004
