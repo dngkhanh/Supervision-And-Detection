@@ -5,13 +5,12 @@ import cloudinary from "../config/cloudinary.js";
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: "cvs",
-    resource_type: "raw", 
-    use_filename: true,
-    unique_filename: true
+    folder: "logos",
+    resource_type: "image",
+    allowed_formats: ["jpg", "jpeg", "png", "webp", "gif"]
   },
 });
 
-const uploadCv = multer({ storage });
+const uploadImage = multer({ storage });
 
-export default uploadCv;
+export default uploadImage;

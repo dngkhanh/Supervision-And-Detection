@@ -1,15 +1,13 @@
-version: "3.8"
-
 services:
 
   api-gateway:
     build:
-      context: ./api-gateway
+      context: ../Web/backend/api-gateway
       dockerfile: dockerfile
     ports:
       - "4000:4000"
     volumes:
-      - ./api-gateway:/app
+      - ../Web/backend/api-gateway:/app
       - /app/node_modules
       - /etc/localtime:/etc/localtime:ro
     environment:
@@ -22,12 +20,12 @@ services:
 
   user-service:
     build:
-      context: ./user-service
+      context: ../Web/backend/user-service
       dockerfile: dockerfile
     ports:
       - "3001:3001"
     volumes:
-      - ./user-service:/app
+      - ../Web/backend/user-service:/app
       - /app/node_modules
       - /etc/localtime:/etc/localtime:ro
     environment:
@@ -35,12 +33,12 @@ services:
 
   job-service:
     build:
-      context: ./job-service
+      context: ../Web/backend/job-service
       dockerfile: dockerfile
     ports:
       - "3002:3002"
     volumes:
-      - ./job-service:/app
+      - ../Web/backend/job-service:/app
       - /app/node_modules
       - /etc/localtime:/etc/localtime:ro
     environment:
@@ -48,12 +46,12 @@ services:
 
   application-service:
     build:
-      context: ./application-service
+      context: ../Web/backend/application-service
       dockerfile: dockerfile
     ports:
       - "3003:3003"
     volumes:
-      - ./application-service:/app
+      - ../Web/backend/application-service:/app
       - /app/node_modules
       - /etc/localtime:/etc/localtime:ro
     environment:
@@ -61,12 +59,12 @@ services:
 
   recommend-service:
     build:
-      context: ./recommend-service
+      context: ../Web/backend/recommend-service
       dockerfile: dockerfile
     ports:
       - "3004:3004"
     volumes:
-      - ./recommend-service:/app
+      - ../Web/backend/recommend-service:/app
       - /app/node_modules
       - /etc/localtime:/etc/localtime:ro
     environment:

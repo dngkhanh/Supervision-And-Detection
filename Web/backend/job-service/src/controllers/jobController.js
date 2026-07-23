@@ -1,9 +1,10 @@
+import mongoose from "mongoose";
 import Job from "../models/job.js";
 import { publishRecommendSearch } from "../config/rabbitconfig.js";
 // dùng rabbitconfig có sẵn
 
 export const getAllJobs = async (req, res) => {
-  const jobs = await Job.find();
+  const jobs = await Job.find({ status: 'available' });
   res.json(jobs);
 };
 
@@ -20,6 +21,20 @@ export const createJob = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized: missing user_id" });
     }
 
+    const categories = req.body.categories || [];
+    const locations = req.body.locations || [];
+
+    const computedProvince = locations[0]?.city || req.body.province || "";
+    const computedDistrict = locations[0]?.district || req.body.district || "";
+    const computedAddress = locations[0]?.addressDetail || req.body.address || "";
+    const computedArea = locations.length > 0
+      ? locations.map(l => `${l.addressDetail}, ${l.district}, ${l.city}`).join("; ")
+      : req.body.area || "";
+
+    const computedIndustry = categories.length > 0
+      ? categories.join(", ")
+      : req.body.industry || "";
+
     // CHỈ lấy các field có trong model
     const job = await Job.create({
       job_id: nextId,
@@ -27,17 +42,47 @@ export const createJob = async (req, res) => {
       company_name: req.body.company_name,
       closed_date: req.body.closed_date,
       salary: req.body.salary,
-      area: req.body.area,
       experience: req.body.experience,
       degree: req.body.degree,
       description: req.body.description,
       requirements: req.body.requirements,
       benefits: req.body.benefits,
+      level: req.body.level,
+      work_type: req.body.work_type,
+      company_logo: req.body.company_logo,
+      working_time: req.body.working_time,
+      
+      locations: locations,
+      categories: categories,
+
+      province: computedProvince,
+      district: computedDistrict,
+      address: computedAddress,
+      area: computedArea,
+      industry: computedIndustry,
 
       post_user_id: postUserId,
       status: "waiting"
     });
     console.log("Create job response:", job);
+
+    // Gửi thông báo đến toàn bộ Admin để duyệt tin
+    try {
+      await fetch("http://user-service:3001/user/notification/admins", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": req.headers.authorization || ""
+        },
+        body: JSON.stringify({
+          message: `Công việc "${job.job_title}" từ công ty "${job.company_name}" đã được đăng tải và đang chờ duyệt.`
+        })
+      });
+      console.log("Đã gửi thông báo chờ duyệt tin đến các Admin");
+    } catch (notifErr) {
+      console.error("Lỗi khi gửi thông báo bài đăng mới tới các Admin:", notifErr.message);
+    }
+
     res.status(201).json(job);
   } catch (error) {
     console.error("Create job error:", error);
@@ -174,13 +219,13 @@ const MAX_FETCHED_IDS = 10;
  */
 export const getRandomJobs = async (req, res) => {
   try {
-    
+
     // 1. Kiểm tra và Reset danh sách ID đã lấy
     if (fetchedJobIds.length >= MAX_FETCHED_IDS) {
       console.log("Danh sách fetchedJobIds đã đạt giới hạn. Resetting...");
       fetchedJobIds = []; // Xóa hết các ID đã lưu
     }
-    
+
     // 2. Định nghĩa điều kiện tìm kiếm: Loại trừ các Job có ID nằm trong fetchedJobIds
     // Sử dụng _id của MongoDB (thường là ObjectId)
     const matchCondition = fetchedJobIds.length > 0
@@ -188,7 +233,7 @@ export const getRandomJobs = async (req, res) => {
       : {}; // Nếu chưa có ID nào, không có điều kiện loại trừ
 
     let jobs = [];
-    
+
     // 3. Sử dụng Aggregate: Match (loại trừ) trước, sau đó Sample (lấy ngẫu nhiên)
     jobs = await Job.aggregate([
       { $match: matchCondition }, // Lọc bỏ các Job đã lấy
@@ -198,25 +243,25 @@ export const getRandomJobs = async (req, res) => {
     // 4. Xử lý trường hợp không đủ Jobs sau khi lọc
     // Nếu số lượng Job lấy được ít hơn 5 VÀ ta đã có danh sách lọc
     if (jobs.length < 5 && fetchedJobIds.length > 0) {
-        console.log(`Chỉ lấy được ${jobs.length} Jobs sau khi lọc. Reset fetchedJobIds và thử lại.`);
-        
-        fetchedJobIds = []; // Reset để có thể lấy lại
-        
-        // Thử lại lần 2 (lấy ngẫu nhiên 5 Job từ tất cả các Job)
-        jobs = await Job.aggregate([
-            { $sample: { size: 5 } } 
-        ]);
+      console.log(`Chỉ lấy được ${jobs.length} Jobs sau khi lọc. Reset fetchedJobIds và thử lại.`);
+
+      fetchedJobIds = []; // Reset để có thể lấy lại
+
+      // Thử lại lần 2 (lấy ngẫu nhiên 5 Job từ tất cả các Job)
+      jobs = await Job.aggregate([
+        { $sample: { size: 5 } }
+      ]);
     }
 
     // 5. Lưu các ID của các Job vừa lấy vào mảng fetchedJobIds
     const newIds = jobs.map(job => job.id);
-    
+
     // Thêm các ID mới, đảm bảo tổng số không vượt quá giới hạn
     newIds.forEach(id => {
-        // Chỉ thêm nếu tổng số ID hiện tại nhỏ hơn giới hạn
-        if (fetchedJobIds.length < MAX_FETCHED_IDS) {
-            fetchedJobIds.push(id);
-        }
+      // Chỉ thêm nếu tổng số ID hiện tại nhỏ hơn giới hạn
+      if (fetchedJobIds.length < MAX_FETCHED_IDS) {
+        fetchedJobIds.push(id);
+      }
     });
 
     // 6. Trả về kết quả
@@ -248,8 +293,13 @@ export const getJobById = async (req, res) => {
     //   return res.status(400).json({ message: "Job ID không hợp lệ" });
     // }
 
-    // 3. Tìm kiếm Job trong database bằng ID
-    const job = await Job.findOne({ job_id: jobId });
+    // 3. Tìm kiếm Job trong database bằng ID (chấp nhận cả job_id số hoặc _id ObjectId để tăng độ tương thích)
+    let job;
+    if (mongoose.Types.ObjectId.isValid(jobId)) {
+      job = await Job.findOne({ $or: [{ _id: jobId }, { job_id: jobId }] });
+    } else {
+      job = await Job.findOne({ job_id: jobId });
+    }
 
     // 4. Xử lý trường hợp không tìm thấy Job
     if (!job) {
@@ -268,7 +318,7 @@ export const getJobById = async (req, res) => {
 
 export const getJobsPagination = async (req, res) => {
   try {
-  const DEFAULT_LIMIT = 6;
+    const DEFAULT_LIMIT = 6;
 
     const pageQuery = req.query.page;
     const limitQuery = req.query.limit;
@@ -290,13 +340,14 @@ export const getJobsPagination = async (req, res) => {
     }
 
     // 🔥 Tổng số job
-    const totalJobs = await Job.countDocuments({});
+    const filter = { status: 'available' };
+    const totalJobs = await Job.countDocuments(filter);
     const totalPages = Math.ceil(totalJobs / limit) || 1;
 
     // Use stable skip/limit pagination so pages don't shift when new jobs are added
     const skip = (page - 1) * limit;
 
-    const jobs = await Job.find({})
+    const jobs = await Job.find(filter)
       .sort({ job_id: -1 }) // newest first
       .skip(skip)
       .limit(limit);
@@ -344,7 +395,7 @@ export const getJobsPagination = async (req, res) => {
 export const getJobsForHomePagination = async (req, res) => {
   try {
     const DEFAULT_LIMIT = 6;
-    
+
     // 1. Lấy và Xử lý tham số phân trang
     const pageQuery = req.query.page;
     const limitQuery = req.query.limit;
@@ -369,7 +420,7 @@ export const getJobsForHomePagination = async (req, res) => {
     const filterCondition = {
       status: { $in: ['available'] }
     };
-    
+
     // 3. Tính toán Metadata (Tổng số Job thỏa mãn điều kiện)
     // 🔥 Tổng số job có status là 'available' hoặc 'outdated'
     const totalFilteredJobs = await Job.countDocuments(filterCondition);
@@ -503,7 +554,7 @@ export const search_fill = async (req, res) => {
         type: "search_fill",
         source: "job-service",
         timestamp: new Date().toISOString(),
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     // =========================
@@ -528,8 +579,8 @@ export const search_fill = async (req, res) => {
 
 export const getPostedJob = async (req, res) => {
   try {
-    // 1. Lấy user_id từ token (verifyToken đã gán req.user)
-    const user_id = req.user?.user_id || req.user?.id || req.user?._id;
+    // 1. Lấy user_id từ query hoặc token (verifyToken đã gán req.user)
+    const user_id = req.query.userId || req.user?.user_id || req.user?.id || req.user?._id;
 
     if (!user_id) {
       return res.status(401).json({
@@ -537,8 +588,10 @@ export const getPostedJob = async (req, res) => {
       });
     }
 
+    const queryUserId = isNaN(user_id) ? user_id : Number(user_id);
+
     // 2. Lấy các job do user này đăng
-    const jobs = await Job.find({ post_user_id: user_id })
+    const jobs = await Job.find({ post_user_id: queryUserId })
       .sort({ createdAt: -1 }); // job mới nhất lên trước (nếu có timestamps)
 
     // 3. Trả kết quả
@@ -633,7 +686,7 @@ export const getWaitingJobs = async (req, res) => {
 
 export const acceptJob = async (req, res) => {
   try {
-    // 1. Lấy job_id từ body (hoặc params tùy theo cách bạn thiết kế route)
+    // 1. Lấy job_id từ body
     const { job_id } = req.body;
 
     if (!job_id) {
@@ -649,8 +702,8 @@ export const acceptJob = async (req, res) => {
 
     // 3. Kiểm tra nếu job KHÔNG PHẢI đang ở trạng thái waiting
     if (job.status !== 'waiting') {
-      return res.status(400).json({ 
-        message: `Không thể duyệt! Trạng thái hiện tại là '${job.status}', không phải 'waiting'.` 
+      return res.status(400).json({
+        message: `Không thể duyệt! Trạng thái hiện tại là '${job.status}', không phải 'waiting'.`
       });
     }
 
@@ -658,7 +711,24 @@ export const acceptJob = async (req, res) => {
     job.status = 'available';
     await job.save();
 
-    // 5. Trả về thông báo thành công
+    // 5. Gửi thông báo đến nhà tuyển dụng
+    try {
+      await fetch("http://user-service:3001/user/notification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": req.headers.authorization || ""
+        },
+        body: JSON.stringify({
+          user_id: job.post_user_id,
+          message: `Bài đăng "${job.job_title}" của bạn đã được phê duyệt.`
+        })
+      });
+    } catch (notifErr) {
+      console.error("Lỗi gửi thông báo duyệt bài:", notifErr.message);
+    }
+
+    // 6. Trả về thông báo thành công
     res.status(200).json({
       message: "Duyệt công việc thành công!",
       data: job
@@ -675,35 +745,50 @@ export const acceptJob = async (req, res) => {
 
 export const refuseJob = async (req, res) => {
   try {
-    // 1. Lấy job_id từ body
-    const { job_id } = req.body;
+    // 1. Lấy job_id và lý do từ body
+    const { job_id, reason } = req.body;
 
     if (!job_id) {
       return res.status(400).json({ message: "Vui lòng cung cấp job_id" });
     }
 
-    // 2. Tìm job và kiểm tra trạng thái hiện tại
+    // 2. Tìm job
     const job = await Job.findOne({ job_id: job_id });
 
     if (!job) {
       return res.status(404).json({ message: "Không tìm thấy công việc này" });
     }
 
-    // 3. Kiểm tra nếu job KHÔNG PHẢI đang ở trạng thái waiting
-    // (Chỉ những job đang đợi duyệt mới có thể bị từ chối/xóa)
-    if (job.status !== 'waiting') {
-      return res.status(400).json({ 
-        message: `Không thể từ chối! Trạng thái hiện tại là '${job.status}', không phải 'waiting'.` 
+    // 3. Kiểm tra trạng thái: Admin có quyền từ chối/xóa tin waiting, available, expired, outdated và hidden
+    if (job.status === 'deleted') {
+      return res.status(400).json({
+        message: `Không thể gỡ bỏ! Công việc này đã bị xóa trước đó.`
       });
     }
 
-    // 4. Cập nhật trạng thái thành deleted
-    job.status = 'deleted';
-    await job.save();
+    // 4. Thực hiện xóa cứng bài viết khỏi database
+    await Job.deleteOne({ job_id: job_id });
 
-    // 5. Trả về thông báo thành công
+    // 5. Gửi thông báo đến nhà tuyển dụng kèm lý do
+    try {
+      await fetch("http://user-service:3001/user/notification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": req.headers.authorization || ""
+        },
+        body: JSON.stringify({
+          user_id: job.post_user_id,
+          message: `Bài đăng "${job.job_title}" của bạn đã bị xóa. Lý do: ${reason || 'Nội dung không phù hợp.'}`
+        })
+      });
+    } catch (notifErr) {
+      console.error("Lỗi gửi thông báo từ chối bài:", notifErr.message);
+    }
+
+    // 6. Trả về thông báo thành công
     res.status(200).json({
-      message: "Từ chối công việc thành công!",
+      message: "Từ chối/Gỡ công việc thành công!",
       data: job
     });
 
@@ -713,5 +798,311 @@ export const refuseJob = async (req, res) => {
       message: "Lỗi Server khi thực hiện từ chối công việc",
       error: error.message
     });
+  }
+};
+
+// ==========================================
+// QUẢN LÝ CÔNG VIỆC BỞI NGƯỜI DÙNG (UC-04)
+// ==========================================
+
+// Xóa tạm thời công việc (Soft-Delete)
+export const softDeleteJob = async (req, res) => {
+  try {
+    const { id } = req.params; // job_id
+    const user_id = req.user?.user_id || req.user?.id || req.user?._id;
+
+    if (!user_id) return res.status(401).json({ message: "Chưa đăng nhập" });
+
+    const job = await Job.findOne({ job_id: id });
+    if (!job) return res.status(404).json({ message: "Không tìm thấy công việc" });
+
+    if (String(job.post_user_id) !== String(user_id)) {
+      return res.status(403).json({ message: "Không có quyền xóa bài đăng này" });
+    }
+
+    job.status = 'deleted';
+    await job.save();
+
+    res.status(200).json({ message: "Đã xóa công việc thành công (tạm ẩn)", data: job });
+  } catch (error) {
+    console.error("Soft delete job error:", error);
+    res.status(500).json({ message: "Lỗi server khi xóa công việc", error: error.message });
+  }
+};
+
+// Khôi phục công việc đã ẩn
+export const restoreJob = async (req, res) => {
+  try {
+    const { id } = req.params; // job_id
+    const user_id = req.user?.user_id || req.user?.id || req.user?._id;
+
+    if (!user_id) return res.status(401).json({ message: "Chưa đăng nhập" });
+
+    const job = await Job.findOne({ job_id: id });
+    if (!job) return res.status(404).json({ message: "Không tìm thấy công việc" });
+
+    if (String(job.post_user_id) !== String(user_id)) {
+      return res.status(403).json({ message: "Không có quyền khôi phục bài đăng này" });
+    }
+
+    job.status = 'available'; // Theo yêu cầu, khôi phục thì thành active/available luôn
+    await job.save();
+
+    res.status(200).json({ message: "Đã khôi phục công việc thành công", data: job });
+  } catch (error) {
+    console.error("Restore job error:", error);
+    res.status(500).json({ message: "Lỗi server khi khôi phục công việc", error: error.message });
+  }
+};
+
+// Cập nhật công việc
+export const updateJob = async (req, res) => {
+  try {
+    const { id } = req.params; // job_id
+    const user_id = req.user?.user_id || req.user?.id || req.user?._id;
+
+    if (!user_id) return res.status(401).json({ message: "Chưa đăng nhập" });
+
+    const job = await Job.findOne({ job_id: id });
+    if (!job) return res.status(404).json({ message: "Không tìm thấy công việc" });
+
+    if (String(job.post_user_id) !== String(user_id)) {
+      return res.status(403).json({ message: "Không có quyền chỉnh sửa bài đăng này" });
+    }
+
+    // Cập nhật các trường
+    const updatableFields = [
+      'job_title', 'company_name', 'closed_date', 'salary',
+      'experience', 'degree', 'description', 'requirements', 'benefits',
+      'level', 'work_type', 'company_logo', 'working_time',
+      'locations', 'categories'
+    ];
+
+    updatableFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        job[field] = req.body[field];
+      }
+    });
+
+    if (req.body.locations !== undefined) {
+      const locs = req.body.locations || [];
+      job.province = locs[0]?.city || "";
+      job.district = locs[0]?.district || "";
+      job.address = locs[0]?.addressDetail || "";
+      job.area = locs.map(l => `${l.addressDetail}, ${l.district}, ${l.city}`).join("; ");
+    }
+    if (req.body.categories !== undefined) {
+      const cats = req.body.categories || [];
+      job.industry = cats.join(", ");
+    }
+
+    await job.save();
+
+    res.status(200).json({ message: "Cập nhật công việc thành công", data: job });
+  } catch (error) {
+    console.error("Update job error:", error);
+    res.status(500).json({ message: "Lỗi server khi cập nhật công việc", error: error.message });
+  }
+};
+
+export const getAdminJobStats = async (req, res) => {
+  try {
+    const today = new Date();
+
+    // 1. Tổng số lượng công việc còn thời hạn ứng tuyển
+    const activeJobs = await Job.countDocuments({
+      status: "available",
+      closed_date: { $gte: today }
+    });
+
+    // 2. Tổng số lượng công việc đã hết hạn
+    const expiredJobs = await Job.countDocuments({
+      $or: [
+        { status: "expired" },
+        { status: "outdated" },
+        { status: "available", closed_date: { $lt: today } }
+      ]
+    });
+
+    // 3. Tổng số lượng bài đăng tuyển dụng đang đợi duyệt
+    const waitingJobs = await Job.countDocuments({
+      status: "waiting"
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        activeJobs,
+        expiredJobs,
+        waitingJobs
+      }
+    });
+  } catch (error) {
+    console.error("Get admin job stats error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Không thể tải dữ liệu, vui lòng thử lại sau",
+      error: error.message
+    });
+  }
+};
+
+export const getAdminJobs = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const { status } = req.query;
+
+    const today = new Date();
+    let filter = {};
+
+    if (status === "active") {
+      filter = {
+        status: "available",
+        closed_date: { $gte: today }
+      };
+    } else if (status === "expired") {
+      filter = {
+        $or: [
+          { status: "expired" },
+          { status: "outdated" },
+          { status: "available", closed_date: { $lt: today } }
+        ]
+      };
+    } else if (status === "waiting") {
+      filter = {
+        status: "waiting"
+      };
+    } else {
+      filter = { status: { $nin: ["deleted", "hidden"] } };
+    }
+
+    // Tính toán số liệu thống kê cho cards (luôn chạy đầy đủ không bị ảnh hưởng bởi filter status hiện tại)
+    const activeJobs = await Job.countDocuments({
+      status: "available",
+      closed_date: { $gte: today }
+    });
+
+    const expiredJobs = await Job.countDocuments({
+      $or: [
+        { status: "expired" },
+        { status: "outdated" },
+        { status: "available", closed_date: { $lt: today } }
+      ]
+    });
+
+    const waitingJobs = await Job.countDocuments({
+      status: "waiting"
+    });
+
+    const totalJobs = await Job.countDocuments(filter);
+    const totalPages = Math.ceil(totalJobs / limit) || 1;
+
+    const jobs = await Job.find(filter)
+      .sort({ job_id: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.status(200).json({
+      success: true,
+      stats: {
+        activeJobs,
+        expiredJobs,
+        waitingJobs
+      },
+      data: jobs,
+      pagination: {
+        page,
+        limit,
+        totalPages,
+        totalJobs
+      }
+    });
+  } catch (error) {
+    console.error("Get admin jobs error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Không thể tải danh sách bài đăng",
+      error: error.message
+    });
+  }
+};
+
+export const hideUserJobs = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ message: "Thiếu userId" });
+    }
+
+    const jobs = await Job.find({ post_user_id: Number(userId), status: { $ne: "hidden" } });
+
+    for (const job of jobs) {
+      job.original_status = job.status;
+      job.status = "hidden";
+      await job.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Đã tạm ẩn ${jobs.length} bài đăng của người dùng`
+    });
+  } catch (error) {
+    console.error("Hide user jobs error:", error);
+    return res.status(500).json({ message: "Lỗi server khi ẩn bài đăng", error: error.message });
+  }
+};
+
+export const restoreUserJobs = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ message: "Thiếu userId" });
+    }
+
+    const jobs = await Job.find({ post_user_id: Number(userId), status: "hidden" });
+
+    for (const job of jobs) {
+      job.status = job.original_status || "available";
+      job.original_status = undefined;
+      await job.save();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Đã khôi phục ${jobs.length} bài đăng của người dùng`
+    });
+  } catch (error) {
+    console.error("Restore user jobs error:", error);
+    return res.status(500).json({ message: "Lỗi server khi khôi phục bài đăng", error: error.message });
+  }
+};
+
+export const getUserJobCounts = async (req, res) => {
+  try {
+    const counts = await Job.aggregate([
+      {
+        $group: {
+          _id: "$post_user_id",
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    const result = {};
+    counts.forEach(item => {
+      if (item._id !== null && item._id !== undefined) {
+        result[item._id] = item.count;
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error("getUserJobCounts error:", error);
+    return res.status(500).json({ success: false, message: "Lỗi server khi lấy số lượng bài đăng", error: error.message });
   }
 };

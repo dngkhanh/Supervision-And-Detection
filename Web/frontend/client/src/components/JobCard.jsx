@@ -73,7 +73,7 @@ const JobCard = ({ job = {} }) => {
       className="
         relative bg-white rounded-2xl border border-gray-100
         shadow-lg hover:shadow-2xl transition-all
-        p-5 h-[360px] flex flex-col
+        p-5 h-[360px] flex flex-col w-full min-w-0
       "
       role="button"
       tabIndex={0}
@@ -88,12 +88,20 @@ const JobCard = ({ job = {} }) => {
       }}
     >
       {/* ===== HEADER ===== */}
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold shadow-md shrink-0">
-          {displayCompany?.charAt(0)?.toUpperCase() || "C"}
-        </div>
+      <div className="flex items-start gap-4 w-full min-w-0">
+        {job.company_logo ? (
+          <img
+            src={job.company_logo}
+            alt={displayCompany}
+            className="w-12 h-12 rounded-xl object-cover border shadow-md shrink-0"
+          />
+        ) : (
+          <div className="w-12 h-12 rounded-xl bg-[#00b14f] text-white flex items-center justify-center font-bold shadow-md shrink-0">
+            {displayCompany?.charAt(0)?.toUpperCase() || "C"}
+          </div>
+        )}
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 min-h-[48px]">
             {job_title}
           </h3>
@@ -101,7 +109,7 @@ const JobCard = ({ job = {} }) => {
 
           <div className="mt-2 flex flex-wrap gap-2 min-h-[32px]">
             {area && (
-              <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+              <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium truncate max-w-[200px]" title={area}>
                 📍 {area}
               </span>
             )}

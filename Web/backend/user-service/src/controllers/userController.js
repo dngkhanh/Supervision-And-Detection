@@ -1,6 +1,23 @@
 import User from '../models/user.js';
+import Notification from "../models/notification.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import cloudinary from "../config/cloudinary.js";
+
+export const uploadImageController = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Vui lòng chọn file ảnh để upload" });
+    }
+    res.status(200).json({
+      success: true,
+      image_url: req.file.path
+    });
+  } catch (err) {
+    console.error("Lỗi khi upload ảnh:", err);
+    res.status(500).json({ message: "Lỗi hệ thống khi tải ảnh", error: err.message });
+  }
+};
 
 export const getAllUsers = async (req, res) => {
   const users = await User.find();
@@ -22,6 +39,17 @@ export const login = async (req, res) => {
     
     if (!user) {
       return res.status(404).json({ message: username + " không tồn tại!" });
+    }
+
+    if (user.status === 'Deleted') {
+      return res.status(404).json({ message: username + " không tồn tại!" });
+    }
+
+    if (user.status === 'Banned') {
+      return res.status(403).json({
+        status: "error",
+        message: `Tài khoản của bạn đã bị khóa vì lý do: ${user.ban_reason || 'Không có lý do cụ thể'}`
+      });
     }
 
     // 2. So sánh mật khẩu
@@ -237,57 +265,18 @@ export const getCurrentUser = async (req, res) => {
   }
 };
 
-export const uploadCvController = async (req, res) => {
-  try {
-    // 1. Lấy user_id từ thông tin đăng nhập (middleware truyền vào)
-    // Lưu ý: Tùy vào cách bạn gắn vào req ở middleware auth, có thể là req.user.id hoặc req.user.user_id
-    const userId = req.user.user_id; 
-
-    // 2. Kiểm tra xem file có được gửi lên không
-    if (!req.file) {
-      return res.status(400).json({ message: "Vui lòng chọn file CV để upload" });
-    }
-
-    const cvUrl = req.file.path; // Đường dẫn file sau khi qua middleware (multer/cloudinary)
-
-    // 3. Tìm user và cập nhật trường cv_path
-    const updatedUser = await User.findOneAndUpdate(
-      { user_id: userId }, // Tìm theo user_id (kiểu Number trong schema của bạn)
-      { cv_path: cvUrl },   // Gán link CV mới vào
-      { new: true }         // Trả về dữ liệu mới nhất sau khi update
-    ).select("-password");  // Không trả về password để bảo mật
-
-    // 4. Kiểm tra nếu không tìm thấy user
-    if (!updatedUser) {
-      return res.status(404).json({ message: "Không tìm thấy người dùng để cập nhật CV" });
-    }
-
-    // 5. Trả về kết quả thành công
-    res.status(200).json({
-      success: true,
-      message: "Tải CV lên thành công",
-      cv_path: updatedUser.cv_path,
-      user: updatedUser
-    });
-
-  } catch (err) {
-    console.error("Lỗi khi cập nhật CV:", err);
-    res.status(500).json({ message: "Lỗi hệ thống khi tải CV", error: err.message });
-  }
-};
-
 export const getUserProfile = async (req, res) => {
   try {
     const userId = req.user.user_id; // Lấy từ token đã đăng nhập
-    const user = await User.findOne({ user_id: userId }).select("cv_path full_name");
+    const user = await User.findOne({ user_id: userId }).select("full_name");
 
-    if (!user || !user.cv_path) {
-      return res.status(404).json({ message: "Người dùng chưa có CV" });
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
     }
 
     res.json({
       success: true,
-      cv_url: user.cv_path // Trả link này về cho Frontend
+      cv_url: null // Đã loại bỏ CV mặc định
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -296,13 +285,11 @@ export const getUserProfile = async (req, res) => {
 
 export const updateUserController = async (req, res) => {
   try {
-    const { userId } = req.params; // Lấy số 4 từ URL
-    const updateData = req.body;
-
-    // Nếu có upload file CV trong request này
-    if (req.file) {
-      updateData.cv_path = req.file.path;
+    const userId = req.user?.user_id || req.params.userId;
+    if (!userId) {
+      return res.status(400).json({ message: "Thiếu userId" });
     }
+    const updateData = req.body;
 
     const updatedUser = await User.findOneAndUpdate(
       { user_id: userId }, 
@@ -325,11 +312,8 @@ export const getCvByUserId = async (req, res) => {
     // user_id của người MUỐN XEM CV (truyền từ URL)
     const { user_id } = req.params;
 
-    // (Token đã được verify ở middleware, chỉ cần tồn tại là được)
-    // req.user.user_id => user đang đăng nhập (KHÔNG cần so sánh)
-
     // Tìm user theo user_id truyền vào
-    const user = await User.findOne({ user_id }).select("cv_path full_name");
+    const user = await User.findOne({ user_id }).select("full_name status");
 
     if (!user) {
       return res.status(404).json({
@@ -338,19 +322,13 @@ export const getCvByUserId = async (req, res) => {
       });
     }
 
-    if (!user.cv_path) {
-      return res.status(404).json({
-        success: false,
-        message: "Người dùng chưa tải CV"
-      });
-    }
+    const name = user.status === "Deleted" ? "Người dùng đã bị xóa" : user.full_name;
 
-    // Trả link CV
     res.status(200).json({
       success: true,
       user_id: user.user_id,
-      full_name: user.full_name,
-      cv_url: user.cv_path
+      full_name: name,
+      cv_url: null // Đã loại bỏ CV mặc định
     });
 
   } catch (error) {
@@ -359,5 +337,417 @@ export const getCvByUserId = async (req, res) => {
       success: false,
       message: "Lỗi Server"
     });
+  }
+};
+
+export const uploadFileController = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Vui lòng chọn file để upload" });
+    }
+    return res.status(200).json({
+      url: req.file.path,
+      original_filename: req.file.originalname
+    });
+  } catch (error) {
+    console.error("Upload file error:", error);
+    return res.status(500).json({ message: "Lỗi server khi upload file", error: error.message });
+  }
+};
+
+export const incrementAppliedJob = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findOneAndUpdate(
+      { user_id: userId },
+      { $inc: { applied_job: 1 } },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({ message: "Applied job incremented", user });
+  } catch (error) {
+    console.error("Increment applied job error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const createNotification = async (req, res) => {
+  try {
+    const { user_id, message } = req.body;
+    if (!user_id || !message) {
+      return res.status(400).json({ success: false, message: "Thiếu thông tin user_id hoặc message" });
+    }
+    const notif = new Notification({ user_id, message });
+    await notif.save();
+    return res.status(201).json({ success: true, data: notif });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+  }
+};
+
+export const notifyAdmins = async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ success: false, message: "Thiếu thông tin message" });
+    }
+    const admins = await User.find({ role_id: 1 });
+    const notifications = admins.map(admin => ({
+      user_id: admin.user_id,
+      message
+    }));
+    await Notification.insertMany(notifications);
+    return res.status(201).json({ success: true, message: "Đã gửi thông báo đến các Admin" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Lỗi server khi gửi thông báo đến các Admin", error: error.message });
+  }
+};
+
+export const getNotifications = async (req, res) => {
+  try {
+    const user_id = req.user.user_id;
+    const notifications = await Notification.find({ user_id }).sort({ created_at: -1 });
+    return res.status(200).json({ success: true, data: notifications });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+  }
+};
+
+export const markNotificationRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user_id = req.user.user_id;
+    const notif = await Notification.findOneAndUpdate(
+      { notification_id: id, user_id },
+      { is_read: true },
+      { new: true }
+    );
+    if (!notif) return res.status(404).json({ success: false, message: "Không tìm thấy thông báo" });
+    return res.status(200).json({ success: true, data: notif });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+  }
+};
+
+export const getUserPublicInfo = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    // Check if the param is a number (user_id) or a string (username)
+    const isNum = !isNaN(userId) && !isNaN(parseFloat(userId));
+    const query = isNum 
+      ? { user_id: Number(userId) } 
+      : { username: userId };
+
+    const user = await User.findOne(query).select("user_id username full_name email status ban_reason");
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy user" });
+    }
+    return res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+  }
+};
+
+export const getAdminUsers = async (req, res) => {
+  try {
+    const baseFilter = { status: { $ne: 'Deleted' } };
+    const queryFilter = { ...baseFilter };
+
+    if (req.query.status === 'Active') {
+      queryFilter.status = { $nin: ['Banned', 'Deleted'] };
+    } else if (req.query.status) {
+      queryFilter.status = req.query.status;
+    }
+
+    // 1. Quét đếm tổng số lượng cho dashboard (luôn chạy đầy đủ không bị ảnh hưởng bởi bộ lọc status của bảng)
+    const totalUsers = await User.countDocuments(baseFilter);
+    const activeUsers = await User.countDocuments({ status: { $nin: ['Banned', 'Deleted'] } });
+    const bannedUsers = await User.countDocuments({ status: 'Banned' });
+    const candidates = await User.countDocuments({ role_id: 2, status: { $ne: 'Deleted' } });
+    const admins = await User.countDocuments({ role_id: 1, status: { $ne: 'Deleted' } });
+
+    // Số lượng dòng thỏa mãn filter hiện tại (dùng cho phân trang)
+    const filteredCount = await User.countDocuments(queryFilter);
+
+    // 2. Phân trang cho danh sách chi tiết
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const usersList = await User.find(queryFilter)
+      .select("-password") // Không trả về trường mật khẩu bảo mật
+      .sort({ user_id: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // Fetch job counts from job-service (trying both internal docker dns and localhost fallback)
+    let jobCounts = {};
+    const urls = [
+      "http://job-service:3002/job/admin/user-job-counts",
+      "http://localhost:3002/job/admin/user-job-counts"
+    ];
+    for (const url of urls) {
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const json = await response.json();
+          if (json && json.success) {
+            jobCounts = json.data || {};
+            break;
+          }
+        }
+      } catch (err) {
+        console.log(`Failed to fetch job counts from ${url}: ${err.message}`);
+      }
+    }
+
+    const usersWithJobCounts = usersList.map(u => {
+      const userObj = u.toObject();
+      userObj.posted_job = jobCounts[userObj.user_id] || 0;
+      return userObj;
+    });
+
+    const totalPages = Math.ceil(filteredCount / limit) || 1;
+
+    res.status(200).json({
+      success: true,
+      stats: {
+        totalUsers,
+        activeUsers,
+        bannedUsers,
+        candidates,
+        admins
+      },
+      data: usersWithJobCounts,
+      pagination: {
+        page,
+        limit,
+        totalPages,
+        totalUsers: filteredCount // Dùng số lượng thỏa mãn filter hiện tại cho phân trang
+      }
+    });
+  } catch (error) {
+    console.error("Get admin users error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Hệ thống bận, vui lòng thử lại sau",
+      error: error.message
+    });
+  }
+};
+
+const getPublicIdFromUrl = (url) => {
+  try {
+    const parts = url.split('/upload/');
+    if (parts.length < 2) return null;
+    
+    const rightPart = parts[1];
+    const slashIdx = rightPart.indexOf('/');
+    if (slashIdx === -1) return rightPart;
+    
+    return rightPart.substring(slashIdx + 1);
+  } catch (err) {
+    console.error("Parse public_id error:", err);
+    return null;
+  }
+};
+
+const cleanupUserFilesAndApps = async (user) => {
+  try {
+    // 1. Xóa CV profile trên Cloudinary nếu có
+    if (user.cv_path) {
+      const publicId = getPublicIdFromUrl(user.cv_path);
+      if (publicId) {
+        console.log("Cleanup user profile CV:", publicId);
+        await cloudinary.uploader.destroy(publicId, { resource_type: "raw" });
+      }
+      user.cv_path = null;
+    }
+
+    // 2. Gọi sang application-service để dọn dẹp các đơn ứng tuyển và CV ứng tuyển
+    try {
+      const res = await fetch(`http://application-service:3003/application/admin/cleanup-user-applications/${user.user_id}`, {
+        method: "DELETE"
+      });
+      const data = await res.json();
+      console.log("Cleanup user applications result:", data);
+    } catch (appCleanupErr) {
+      console.error("Lỗi khi gọi dọn dẹp ứng tuyển ở application-service:", appCleanupErr.message);
+    }
+
+    // 3. Gọi sang job-service để tạm ẩn toàn bộ tin tuyển dụng của user này
+    try {
+      const res = await fetch(`http://job-service:3002/job/admin/hide-user-jobs/${user.user_id}`, {
+        method: "PUT"
+      });
+      const data = await res.json();
+      console.log("Hide recruiter jobs result:", data);
+    } catch (jobHideErr) {
+      console.error("Lỗi khi gọi tạm ẩn bài đăng ở job-service:", jobHideErr.message);
+    }
+  } catch (err) {
+    console.error("Lỗi dọn dẹp tài liệu người dùng:", err.message);
+  }
+};
+
+export const banUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || reason.trim() === "") {
+      return res.status(400).json({ success: false, message: "Vui lòng cung cấp lý do khóa tài khoản" });
+    }
+
+    const user = await User.findOne({ user_id: Number(userId) });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản người dùng" });
+    }
+
+    if (user.role_id === 1) {
+      return res.status(403).json({ success: false, message: "Không thể khóa tài khoản Admin" });
+    }
+
+    user.status = "Banned";
+    user.ban_reason = reason;
+    
+    // Tự động dọn dẹp tài liệu CV và đơn ứng tuyển của user khi bị BAN
+    await cleanupUserFilesAndApps(user);
+    
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Khóa tài khoản thành công",
+      data: {
+        user_id: user.user_id,
+        status: user.status,
+        ban_reason: user.ban_reason
+      }
+    });
+  } catch (error) {
+    console.error("Ban user error:", error);
+    return res.status(500).json({ success: false, message: "Lỗi server khi khóa tài khoản", error: error.message });
+  }
+};
+
+export const unbanUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findOne({ user_id: Number(userId) });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản người dùng" });
+    }
+
+    user.status = "Active";
+    user.ban_reason = null;
+
+    // Tự động khôi phục toàn bộ tin tuyển dụng bị ẩn của user này khi được UNBAN
+    try {
+      const res = await fetch(`http://job-service:3002/job/admin/restore-user-jobs/${user.user_id}`, {
+        method: "PUT"
+      });
+      const data = await res.json();
+      console.log("Restore recruiter jobs result:", data);
+    } catch (jobRestoreErr) {
+      console.error("Lỗi khi khôi phục bài đăng ở job-service:", jobRestoreErr.message);
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Mở khóa tài khoản thành công",
+      data: {
+        user_id: user.user_id,
+        status: user.status
+      }
+    });
+  } catch (error) {
+    console.error("Unban user error:", error);
+    return res.status(500).json({ success: false, message: "Lỗi server khi mở khóa tài khoản", error: error.message });
+  }
+};
+
+export const deleteUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findOne({ user_id: Number(userId) });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản người dùng" });
+    }
+
+    if (user.role_id === 1) {
+      return res.status(403).json({ success: false, message: "Không thể xóa tài khoản Admin" });
+    }
+
+    user.status = "Deleted";
+    
+    // Tự động dọn dẹp tài liệu CV và đơn ứng tuyển của user khi bị XÓA
+    await cleanupUserFilesAndApps(user);
+    
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Xóa tài khoản thành công"
+    });
+  } catch (error) {
+    console.error("Delete user error:", error);
+    return res.status(500).json({ success: false, message: "Lỗi server khi xóa tài khoản", error: error.message });
+  }
+};
+
+export const decrementAppliedJob = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findOneAndUpdate(
+      { user_id: userId },
+      { $inc: { applied_job: -1 } },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({ message: "Applied job decremented", user });
+  } catch (error) {
+    console.error("Decrement applied job error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+export const deleteCloudinaryFile = async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ message: "Vui lòng cung cấp url file cần xóa" });
+    }
+
+    const publicId = getPublicIdFromUrl(url);
+    if (!publicId) {
+      return res.status(400).json({ message: "URL Cloudinary không hợp lệ" });
+    }
+
+    console.log("Deleting Cloudinary file with publicId:", publicId);
+    
+    const result = await cloudinary.uploader.destroy(publicId, { resource_type: "raw" });
+    
+    return res.status(200).json({
+      success: true,
+      message: "Xóa file thành công",
+      result
+    });
+  } catch (error) {
+    console.error("Delete cloudinary file error:", error);
+    return res.status(500).json({ message: "Server error khi xóa file", error: error.message });
   }
 };
