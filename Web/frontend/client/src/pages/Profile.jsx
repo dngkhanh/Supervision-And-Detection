@@ -51,7 +51,7 @@ const UserProfile = () => {
     try {
       if (!routeUserId) {
         // Viewing own profile directly via /profile
-        const res = await axiosClient.get("/user/user/me");
+        const res = await axiosClient.get("/user/me");
         if (res.data && res.data.user) {
           const u = res.data.user;
           setUser({
@@ -73,7 +73,7 @@ const UserProfile = () => {
         }
       } else {
         // Viewing via /profile/:param (param can be userId or username)
-        const res = await axiosClient.get(`/user/user/info/${routeUserId}`);
+        const res = await axiosClient.get(`/user/info/${routeUserId}`);
         if (res.data && res.data.data) {
           const u = res.data.data;
           const own = String(u.user_id) === String(loggedInUserId);
@@ -140,7 +140,7 @@ const UserProfile = () => {
     if (!targetId) return;
     setLoadingJobs(true);
     try {
-      const url = own ? "/job/job/posted" : `/job/job/posted?userId=${targetId}`;
+      const url = own ? "/job/posted" : `/job/posted?userId=${targetId}`;
       const res = await axiosClient.get(url);
       const jobs = res.data?.data || [];
       
@@ -157,7 +157,7 @@ const UserProfile = () => {
           }
           const jobId = job.job_id || job._id;
           try {
-            const appRes = await axiosClient.get(`/application/application/applier-id/${jobId}`);
+            const appRes = await axiosClient.get(`/application/applier-id/${jobId}`);
             return { ...job, appCount: appRes.data?.count || 0 };
           } catch (err) {
             console.error(`Lỗi fetch app count cho job ${jobId}:`, err);
@@ -184,7 +184,7 @@ const UserProfile = () => {
     setLoading(true);
     try {
       // 1. Update full_name & email in DB
-      await axiosClient.put("/user/user/profile", {
+      await axiosClient.put("/user/profile", {
         full_name: editForm.full_name,
         email: editForm.email
       });
@@ -217,7 +217,7 @@ const UserProfile = () => {
   const handleDeleteJob = async (jobId) => {
     if (!window.confirm("Bạn có chắc chắn muốn tạm ẩn bài đăng tuyển dụng này không?")) return;
     try {
-      await axiosClient.put(`/job/job/${jobId}/soft-delete`);
+      await axiosClient.put(`/job/${jobId}/soft-delete`);
       await fetchPostedJobs();
       setMessage("✅ Đã tạm ẩn công việc thành công!");
     } catch (err) {
@@ -228,7 +228,7 @@ const UserProfile = () => {
 
   const handleRestoreJob = async (jobId) => {
     try {
-      await axiosClient.put(`/job/job/${jobId}/restore`);
+      await axiosClient.put(`/job/${jobId}/restore`);
       await fetchPostedJobs();
       setMessage("✅ Đã khôi phục công việc thành công!");
     } catch (err) {

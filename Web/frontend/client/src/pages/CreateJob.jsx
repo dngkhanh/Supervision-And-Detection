@@ -248,7 +248,7 @@ const CreateJob = () => {
         const formData = new FormData();
         formData.append("image", logoFile);
 
-        const uploadRes = await axiosClient.post("/user/user/upload-image", formData, {
+        const uploadRes = await axiosClient.post("/user/upload-image", formData, {
           headers: { "Content-Type": "multipart/form-data" }
         });
 
@@ -276,7 +276,7 @@ const CreateJob = () => {
         categories: form.categories
       };
 
-      const res = await axiosClient.post("/job/job", payload);
+      const res = await axiosClient.post("/job", payload);
       setMessage("Tạo việc thành công!");
       setForm(initialState);
       setMinSalary("");

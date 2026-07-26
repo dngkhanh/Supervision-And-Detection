@@ -22,7 +22,7 @@ const Navbar = () => {
   useEffect(() => {
     if (token) {
       axiosClient
-        .get("/user/user/me")
+        .get("/user/me")
         .then((res) => {
           setFullName(res.data?.user?.full_name || "");
         })
@@ -33,7 +33,7 @@ const Navbar = () => {
   }, [token]);
 
   const fetchNotifications = () => {
-    axiosClient.get("/user/user/notifications")
+    axiosClient.get("/user/notifications")
       .then(res => {
         setNotifications(res.data?.data || []);
       })
@@ -43,7 +43,7 @@ const Navbar = () => {
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const handleMarkRead = (id) => {
-    axiosClient.put(`/user/user/notification/${id}/read`)
+    axiosClient.put(`/user/notification/${id}/read`)
       .then(() => {
         fetchNotifications();
       })

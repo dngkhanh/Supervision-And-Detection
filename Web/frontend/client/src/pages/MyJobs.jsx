@@ -5,8 +5,8 @@ import { useNavigate } from "react-router-dom";
 import JobCard from "../components/JobCard";
 
 // ===== GIỮ NGUYÊN API =====
-const API_POSTED = "/job/job/posted";
-const API_APPLIED = "/application/application/all-applied";
+const API_POSTED = "/job/posted";
+const API_APPLIED = "/application/all-applied";
 
 const MyJobs = () => {
   const [postedJobs, setPostedJobs] = useState([]);

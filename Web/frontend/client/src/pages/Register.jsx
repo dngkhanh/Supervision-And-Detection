@@ -36,7 +36,7 @@ const Register = () => {
     try {
       setLoading(true);
       const payload = { full_name: form.full_name, email: form.email, password: form.password, username: form.username };
-      const res = await axiosClient.post('/user/user/register', payload);
+      const res = await axiosClient.post('/user/register', payload);
       // show success message then redirect
       setSuccess('Đăng ký thành công! Chuyển hướng sang đăng nhập...');
       setTimeout(() => navigate('/login'), 2000);
