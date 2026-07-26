@@ -39,8 +39,8 @@ mongoose.connect(process.env.MONGO_URI)
     }
 });
 
-// Routes
-app.use("/user", userRoutes);
+// Routes — prefix /user được gateway xử lý, service chỉ cần mount tại /
+app.use("/", userRoutes);
 
 // Start service
 app.listen(process.env.PORT, () =>

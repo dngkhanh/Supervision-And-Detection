@@ -41,7 +41,7 @@ app.get("/health", (req, res) => {
     }
 });
 
-app.use("/recommend", recommendRoutes);
+app.use("/", recommendRoutes);
 
 app.listen(process.env.PORT, () =>
   console.log(`Recommend-service 1 running on PORT ${process.env.PORT}`)

@@ -50,7 +50,7 @@ app.get("/health", (req, res) => {
 });
 
 // routes
-app.use("/job", jobRoutes);
+app.use("/", jobRoutes);
 
 // start server
 app.listen(process.env.PORT, () =>
