@@ -13,12 +13,6 @@ on:
           - apply
           - destroy
 
-# ─── Secrets cần cấu hình ───
-# AZURE_CREDENTIALS       : JSON từ az ad sp create-for-rbac
-# AZURE_SUBSCRIPTION_ID   : ID subscription Azure
-# AZURE_TENANT_ID         : Tenant ID Azure
-# ────────────────────────────
-
 jobs:
   terraform:
     name: Terraform ${{ github.event.inputs.action }}
