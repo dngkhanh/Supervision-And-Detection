@@ -44,7 +44,7 @@ axiosClient.interceptors.response.use(
 
         // 🔥 Gọi API refresh-token
         const res = await axios.post(
-          `${API_URL}/user/user/refresh-token`,
+          `${API_URL}/user/refresh-token`,
           { refreshToken }
         );
 
