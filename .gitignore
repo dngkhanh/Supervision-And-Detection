@@ -63,6 +63,7 @@ Thumbs.db
 /materials/
 AGENTS.md
 
-# Kubernetes Secrets — không commit giá trị thật lên git
-# Dùng secret.yaml.example làm template, điền giá trị thật vào secret.yaml local
+# Infra
 Infrastructure/k8s/secret.yaml
+Infrastructure/terraform/.terraform/
+Infrastructure/terraform/.terraform.lock.hcl
