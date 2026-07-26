@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axiosClient from "../api/axiosClient";
 import Navbar from "../components/Navbar";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const CATEGORY_LIST = [
   "IT - Phần mềm",
@@ -32,10 +32,12 @@ const initialState = {
   categories: []
 };
 
-const CreateJob = () => {
+const EditJob = () => {
+  const { id } = useParams();
   const [form, setForm] = useState(initialState);
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
+  const [existingLogoUrl, setExistingLogoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [userId, setUserId] = useState(null);
@@ -72,7 +74,7 @@ const CreateJob = () => {
 
   const handleRemoveLocation = (index) => {
     if (form.locations.length <= 1) {
-      alert("Phải có ít nhất 1 địa điểm làm việc.");
+      alert("Phải có nhất 1 địa điểm làm việc.");
       return;
     }
     setForm(prev => {
@@ -167,6 +169,67 @@ const CreateJob = () => {
     setForm((f) => ({ ...f, post_user_id: uid }));
   }, [navigate]);
 
+  useEffect(() => {
+    if (id) {
+      axiosClient.get(`/job/job/${id}`)
+        .then(async (res) => {
+          const job = res.data.data || res.data;
+          
+          const locs = (job.locations && job.locations.length > 0)
+            ? job.locations
+            : [{ city: job.province || "", district: job.district || "", addressDetail: job.address || "" }];
+          
+          const cats = (job.categories && job.categories.length > 0)
+            ? job.categories
+            : (job.industry ? job.industry.split(", ").filter(Boolean) : []);
+
+          setForm(prev => ({ 
+            ...prev, 
+            ...job, 
+            locations: locs, 
+            categories: cats 
+          }));
+
+          if (job.company_logo) {
+            setExistingLogoUrl(job.company_logo);
+            setLogoPreview(job.company_logo);
+          }
+          if (job.salary) {
+            if (job.salary === "Thoả thuận") {
+              setSalaryType("negotiable");
+            } else {
+              setSalaryType("range");
+              const match = job.salary.match(/(\d+(?:\.\d+)*)\s*-\s*(\d+(?:\.\d+)*)/);
+              if (match) {
+                setMinSalary(match[1]);
+                setMaxSalary(match[2]);
+              }
+            }
+          }
+
+          // Fetch districts for each loaded city
+          if (provinces.length > 0) {
+            const fetchDistrictsForLoc = async (loc, idx) => {
+              if (loc.city) {
+                const prov = provinces.find(p => p.name === loc.city);
+                if (prov) {
+                  try {
+                    const r = await fetch(`https://provinces.open-api.vn/api/p/${prov.code}?depth=2`);
+                    const data = await r.json();
+                    setDistrictsByRow(prev => ({ ...prev, [idx]: data.districts || [] }));
+                  } catch (e) {
+                    console.error("Lỗi fetch quận huyện:", e);
+                  }
+                }
+              }
+            };
+            await Promise.all(locs.map((loc, idx) => fetchDistrictsForLoc(loc, idx)));
+          }
+        })
+        .catch(err => console.error("Lỗi fetch job:", err));
+    }
+  }, [id, provinces]);
+
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
   const maxDate = new Date(today);
@@ -243,7 +306,7 @@ const CreateJob = () => {
     }
 
     try {
-      let companyLogoUrl = "";
+      let companyLogoUrl = existingLogoUrl;
       if (logoFile) {
         const formData = new FormData();
         formData.append("image", logoFile);
@@ -276,17 +339,11 @@ const CreateJob = () => {
         categories: form.categories
       };
 
-      const res = await axiosClient.post("/job/job", payload);
-      setMessage("Tạo việc thành công!");
-      setForm(initialState);
-      setMinSalary("");
-      setMaxSalary("");
-      setDistrictsByRow({});
-      setLogoFile(null);
-      setLogoPreview(null);
+      const res = await axiosClient.put(`/job/job/${id}`, payload);
+      setMessage("Cập nhật việc thành công!");
     } catch (err) {
       console.error(err);
-      setMessage("Có lỗi khi tạo việc. Kiểm tra console.");
+      setMessage("Có lỗi khi cập nhật việc. Kiểm tra console.");
     } finally {
       setLoading(false);
     }
@@ -297,7 +354,7 @@ const CreateJob = () => {
       <Navbar />
       <div className="max-w-4xl mx-auto p-6 mt-6">
         <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
-          <h1 className="text-3xl font-bold mb-8 text-gray-800 text-center">Tạo việc mới</h1>
+          <h1 className="text-3xl font-bold mb-8 text-gray-800 text-center">Chỉnh sửa tin tuyển dụng</h1>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* THÔNG TIN CHUNG */}
@@ -307,13 +364,13 @@ const CreateJob = () => {
               <div className="grid grid-cols-1 gap-6">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Tiêu đề công việc</label>
-                  <input name="job_title" value={form.job_title} onChange={handleChange} autoComplete="off" className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" required />
+                  <input name="job_title" value={form.job_title} onChange={handleChange} className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" required />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Tên công ty</label>
-                    <input name="company_name" value={form.company_name} onChange={handleChange} autoComplete="off" className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" required />
+                    <input name="company_name" value={form.company_name} onChange={handleChange} className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" required />
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Logo công ty</label>
@@ -402,7 +459,7 @@ const CreateJob = () => {
               <h2 className="text-lg font-bold text-gray-800 mb-4">Địa điểm & Thời gian</h2>
 
               <div className="space-y-4 mb-6">
-                {form.locations.map((loc, idx) => (
+                {form.locations && form.locations.map((loc, idx) => (
                   <div key={idx} className="flex flex-col md:flex-row gap-4 items-center bg-white p-4 rounded-xl border border-gray-200 relative">
                     <div className="w-full md:w-1/4">
                       <label className="block text-xs text-gray-500 mb-1">Tỉnh/Thành phố</label>
@@ -461,7 +518,7 @@ const CreateJob = () => {
                   </div>
                 ))}
 
-                {form.locations.length < 5 && (
+                {form.locations && form.locations.length < 5 && (
                   <button
                     type="button"
                     onClick={handleAddLocation}
@@ -497,9 +554,9 @@ const CreateJob = () => {
 
                 {salaryType === "range" && (
                   <div className="flex items-center gap-4">
-                    <input type="text" name="minSalary" placeholder="Mức thấp nhất (VNĐ)" value={minSalary} onChange={handleChange} autoComplete="off" className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <input type="text" name="minSalary" placeholder="Mức thấp nhất (VNĐ)" value={minSalary} onChange={handleChange} className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" />
                     <span className="text-gray-500 font-bold">-</span>
-                    <input type="text" name="maxSalary" placeholder="Mức cao nhất (VNĐ)" value={maxSalary} onChange={handleChange} autoComplete="off" className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <input type="text" name="maxSalary" placeholder="Mức cao nhất (VNĐ)" value={maxSalary} onChange={handleChange} className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" />
                   </div>
                 )}
               </div>
@@ -517,7 +574,7 @@ const CreateJob = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Bằng cấp</label>
-                  <input name="degree" value={form.degree} onChange={handleChange} autoComplete="off" className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <input name="degree" value={form.degree} onChange={handleChange} className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
 
@@ -526,9 +583,8 @@ const CreateJob = () => {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Thời gian làm việc</label>
                   <input
                     name="working_time"
-                    value={form.working_time}
+                    value={form.working_time || ""}
                     onChange={handleChange}
-                    autoComplete="off"
                     placeholder="Ví dụ: Từ thứ 2 - thứ 6 (8h- 16h), nghỉ thứ 7, chủ nhật..."
                     className="block w-full rounded-xl border border-gray-300 px-4 py-3 text-base focus:ring-2 focus:ring-blue-500 outline-none"
                     required
@@ -557,10 +613,10 @@ const CreateJob = () => {
 
             <div className="flex items-center gap-4 pt-4 border-t">
               <button type="submit" disabled={loading} className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition disabled:bg-gray-400">
-                {loading ? "Đang xử lý..." : "Tạo việc mới"}
+                {loading ? "Đang xử lý..." : "Cập nhật công việc"}
               </button>
-              <button type="button" onClick={() => { setForm(initialState); setMinSalary(""); setMaxSalary(""); setSelectedProvinceCode(""); setLogoFile(null); setLogoPreview(null); }} className="px-8 py-3 bg-white border border-gray-300 hover:bg-gray-50 font-bold text-gray-700 rounded-xl transition">
-                Nhập lại
+              <button type="button" onClick={() => navigate('/my-jobs')} className="px-8 py-3 bg-white border border-gray-300 hover:bg-gray-50 font-bold text-gray-700 rounded-xl transition">
+                Hủy
               </button>
             </div>
 
@@ -576,4 +632,4 @@ const CreateJob = () => {
   );
 };
 
-export default CreateJob;
+export default EditJob;

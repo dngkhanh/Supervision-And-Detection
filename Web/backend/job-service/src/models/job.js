@@ -1,19 +1,34 @@
 import mongoose from "mongoose";
 
 const JobSchema = new mongoose.Schema({
-  job_id: Number,                 // nếu muốn auto thì bỏ field này
-  job_title: String,
-  company_name: String,
-  closed_date: Date,
-  salary: String, // Đã đổi từ Number sang String
-  area: String,
-  experience: String,
-  degree: String,
-  post_user_id: Number,
-  description: String,
-  requirements: String,
-  benefits: String,
-  status: String  // available, waitting, deleted, outdated
+  job_id: Number,
+  job_title: String,
+  company_name: String,
+  closed_date: Date,
+  salary: String,
+  area: String,
+  experience: String,
+  degree: String,
+  post_user_id: Number,
+  description: String,
+  requirements: String,
+  benefits: String,
+  status: String,
+  original_status: String,
+  industry: String,
+  level: String,
+  work_type: String,
+  province: String,
+  district: String,
+  address: String,
+  company_logo: String,
+  working_time: String,
+  locations: [{
+    city: String,
+    district: String,
+    addressDetail: String
+  }],
+  categories: [String]
 }, { timestamps: true });
 
-export default mongoose.model("Job", JobSchema,"job");
+export default mongoose.model("Job", JobSchema, "job");
