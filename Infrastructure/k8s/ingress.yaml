@@ -8,6 +8,12 @@
 #   Cài qua AKS add-on: az aks enable-addons --addons ingress-appgw
 #
 # TLS: dùng cert-manager + Let's Encrypt hoặc upload cert lên Azure Key Vault
+#
+# ⚠️ TRƯỚC KHI APPLY FILE NÀY:
+# 1. Cài NGINX Ingress Controller: helm install ingress-nginx ...
+# 2. Lấy External IP: kubectl get svc -n ingress-nginx ingress-nginx-controller
+# 3. Thay thế <EXTERNAL-IP> bên dưới với IP thật (dạng: 20.123.45.67)
+# 4. Domain sẽ tự động resolve qua nip.io (không cần mua domain)
 # =============================================================
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -23,9 +29,9 @@ metadata:
     # HTTPS redirect — bỏ comment nếu chưa có TLS
     # nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
-  ingressClassName: nginx   # nginx-ingress Helm chart; dùng "azure/application-gateway" nếu dùng AGIC
+  ingressClassName: nginx
   rules:
-  - host: supervision.yourdomain.com   # Đổi thành domain thực của bạn
+  - host: supervision.135.171.160.56.nip.io
     http:
       paths:
       # Tất cả traffic → api-gateway, gateway tự route đến service phù hợp.
@@ -39,5 +45,5 @@ spec:
   # TLS: bỏ comment sau khi có cert
   # tls:
   # - hosts:
-  #   - supervision.yourdomain.com
+  #   - supervision.<EXTERNAL-IP>.nip.io
   #   secretName: supervision-tls-secret

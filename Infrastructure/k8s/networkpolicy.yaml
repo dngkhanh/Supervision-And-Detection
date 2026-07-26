@@ -52,7 +52,6 @@ spec:
 
 ---
 # --- 3. User Service: nhận traffic từ api-gateway VÀ application-service ---
-# application-service gọi user-service để lấy CV ứng viên (/user/cv/:user_id)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -78,8 +77,6 @@ spec:
 
 ---
 # --- 4. Job Service: nhận traffic từ api-gateway, application-service VÀ recommend-service ---
-# application-service gọi job-service để lấy chi tiết job (/job/:id)
-# recommend-service gọi job-service /job/home và /job/search_fill
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -151,10 +148,7 @@ spec:
       port: 3004
 
 ---
-# --- 7. Egress: job-service → RabbitMQ Cloud (CloudAMQP / AWS MQ) ---
-# RabbitMQ chạy trên cloud, không có Pod trong cluster.
-# Cần Egress policy để job-service có thể gọi ra ngoài cluster.
-# Port 5671 = AMQPS (SSL), 5672 = AMQP (không mã hóa — fallback)
+# --- 7. Egress: job-service → RabbitMQ Cloud + MongoDB Atlas ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -169,10 +163,12 @@ spec:
   egress:
   - ports:
     - protocol: TCP
-      port: 5671   # AMQPS (SSL) — CloudAMQP / AWS MQ
+      port: 5671   # AMQPS (SSL) — CloudAMQP
     - protocol: TCP
-      port: 5672   # AMQP (không mã hóa — fallback)
-  # Cho phép DNS resolution để resolve hostname RabbitMQ cloud
+      port: 5672   # AMQP (fallback)
+    - protocol: TCP
+      port: 27017  # MongoDB Atlas
+  # DNS resolution
   - ports:
     - protocol: UDP
       port: 53
@@ -180,8 +176,7 @@ spec:
       port: 53
 
 ---
-# --- 8. Egress: recommend-service → RabbitMQ Cloud ---
-# recommend-service consume queue recommend_queue từ RabbitMQ cloud
+# --- 8. Egress: recommend-service → RabbitMQ Cloud + MongoDB Atlas ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -199,7 +194,9 @@ spec:
       port: 5671   # AMQPS (SSL)
     - protocol: TCP
       port: 5672   # AMQP (fallback)
-  # Cho phép DNS resolution
+    - protocol: TCP
+      port: 27017  # MongoDB Atlas
+  # DNS resolution
   - ports:
     - protocol: UDP
       port: 53

@@ -1,6 +1,5 @@
 # =============================================================
 # HPA — Horizontal Pod Autoscaler — Local (Minikube)
-# Yêu cầu: minikube addons enable metrics-server
 #
 # Kiểm tra: kubectl get hpa -n supervision-dev
 # Test scale: kubectl run -it --rm load-generator \
@@ -19,8 +18,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: api-gateway
-  minReplicas: 1            # Local: min 1 (production: 2)
-  maxReplicas: 3            # Local: max 3 (production: 5)
+  minReplicas: 1
+  maxReplicas: 2
   metrics:
   - type: Resource
     resource:
@@ -42,7 +41,7 @@ spec:
     kind: Deployment
     name: user-service
   minReplicas: 1
-  maxReplicas: 3
+  maxReplicas: 2
   metrics:
   - type: Resource
     resource:
@@ -64,7 +63,7 @@ spec:
     kind: Deployment
     name: recommend-service
   minReplicas: 1
-  maxReplicas: 3
+  maxReplicas: 2
   metrics:
   - type: Resource
     resource:
@@ -86,7 +85,7 @@ spec:
     kind: Deployment
     name: job-service
   minReplicas: 1
-  maxReplicas: 2            # Nhóm standard: max 2 (production: 3)
+  maxReplicas: 2
   metrics:
   - type: Resource
     resource:
