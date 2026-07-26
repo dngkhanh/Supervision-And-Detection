@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: supervision-dev
+  labels:
+    name: supervision-dev
+    environment: azure

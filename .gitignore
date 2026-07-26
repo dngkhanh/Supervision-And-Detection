@@ -1,1 +1,69 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage
+*.lcov
+.nyc_output
+
+# Dependency directories
+node_modules/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm/eslint cache
+.npm
+.eslintcache
+.stylelintcache
+
+# dotenv environment variables file
+.env
+.env.*
+!.env.example
+
+# Build outputs (Vite, Next, Nuxt, etc.)
+dist
+dist-ssr
+build
+.next
+out
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Original
 /doc/
+/materials/
+AGENTS.md
+
+# Infra
+Infrastructure/k8s/secret.yaml
+Infrastructure/terraform/.terraform/
+Infrastructure/terraform/.terraform.lock.hcl

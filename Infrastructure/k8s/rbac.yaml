@@ -1,0 +1,92 @@
+# =============================================================
+# RBAC — Role-Based Access Control — Local (Minikube)
+# Nguyên tắc Least Privilege:
+#   - backend-sa: chỉ đọc ConfigMap + Secret trong namespace
+#   - monitoring-sa: đọc metrics toàn cluster (ClusterRole)
+# =============================================================
+
+# --- ServiceAccount cho Backend services ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend-sa
+  namespace: supervision-dev
+  labels:
+    environment: local
+
+---
+# --- ServiceAccount cho Monitoring ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitoring-sa
+  namespace: supervision-dev
+  labels:
+    environment: local
+
+---
+# --- Role: Backend chỉ đọc ConfigMap và Secret trong namespace ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backend-role
+  namespace: supervision-dev
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+
+---
+# --- RoleBinding: Gắn backend-role vào backend-sa ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backend-rolebinding
+  namespace: supervision-dev
+subjects:
+- kind: ServiceAccount
+  name: backend-sa
+  namespace: supervision-dev
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: backend-role
+
+---
+# --- ClusterRole: Monitoring đọc metrics toàn cluster ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: monitoring-clusterrole
+  labels:
+    environment: local
+rules:
+- apiGroups: [""]
+  resources: ["nodes", "pods", "services", "endpoints", "namespaces"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["nodes", "pods"]
+  verbs: ["get", "list"]
+
+---
+# --- ClusterRoleBinding: Gắn monitoring-clusterrole vào monitoring-sa ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: monitoring-clusterrolebinding
+  labels:
+    environment: local
+subjects:
+- kind: ServiceAccount
+  name: monitoring-sa
+  namespace: supervision-dev
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: monitoring-clusterrole

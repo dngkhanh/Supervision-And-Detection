@@ -1,0 +1,77 @@
+# ConfigMap cho API Gateway
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-config
+  namespace: supervision-dev
+  labels:
+    app: api-gateway
+    environment: azure
+data:
+  PORT: "3000"
+  TZ: "Asia/Ho_Chi_Minh"
+  NODE_ENV: "production"
+  USER_SERVICE_URL: "http://user-service:3001"
+  JOB_SERVICE_URL: "http://job-service:3002"
+  APPLICATION_SERVICE_URL: "http://application-service:3003"
+  RECOMMEND_SERVICE_URL: "http://recommend-service:3004"
+
+---
+# ConfigMap cho User Service
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-service-config
+  namespace: supervision-dev
+  labels:
+    app: user-service
+    environment: azure
+data:
+  PORT: "3001"
+  TZ: "Asia/Ho_Chi_Minh"
+  NODE_ENV: "production"
+
+---
+# ConfigMap cho Job Service
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: job-service-config
+  namespace: supervision-dev
+  labels:
+    app: job-service
+    environment: azure
+data:
+  PORT: "3002"
+  TZ: "Asia/Ho_Chi_Minh"
+  NODE_ENV: "production"
+
+---
+# ConfigMap cho Application Service
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: application-service-config
+  namespace: supervision-dev
+  labels:
+    app: application-service
+    environment: azure
+data:
+  PORT: "3003"
+  TZ: "Asia/Ho_Chi_Minh"
+  NODE_ENV: "production"
+
+---
+# ConfigMap cho Recommend Service
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: recommend-service-config
+  namespace: supervision-dev
+  labels:
+    app: recommend-service
+    environment: azure
+data:
+  PORT: "3004"
+  TZ: "Asia/Ho_Chi_Minh"
+  NODE_ENV: "production"

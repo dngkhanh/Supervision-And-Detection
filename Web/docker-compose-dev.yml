@@ -1,0 +1,229 @@
+version: "3.8"
+
+# =============================================================
+# Docker Compose — Local Dev
+# Đặt tại: Web/docker-compose-dev.yml
+#
+# Chạy:  docker compose -f docker-compose-dev.yml up --build
+# Dừng:  docker compose -f docker-compose-dev.yml down
+# Logs:  docker compose -f docker-compose-dev.yml logs -f <service>
+# =============================================================
+
+networks:
+  supervision-net:
+    driver: bridge
+
+# Persisted data cho RabbitMQ (không mất queue khi restart)
+volumes:
+  rabbitmq-data:
+
+services:
+
+  # ────────────────────────────────────────────────
+  # RabbitMQ — Message Broker
+  # job-service  → publish → exchange app_events
+  # recommend-service → consume → queue recommend_queue
+  # Management UI: http://localhost:15672  (guest/guest)
+  # ────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - supervision-net
+
+  # ────────────────────────────────────────────────
+  # User Service — port 3001
+  # ────────────────────────────────────────────────
+  user-service:
+    build:
+      context: ./backend/user-service
+      dockerfile: ../../Infrastructure/Docker-file/user-service.Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend/user-service:/app
+      - /app/node_modules           # Tránh ghi đè node_modules từ host
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - NODE_ENV=development
+      - PORT=3001
+    env_file:
+      - ./backend/user-service/.env # MONGO_URI, JWT_SECRET, CLOUDINARY_*
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - supervision-net
+
+  # ────────────────────────────────────────────────
+  # Job Service — port 3002
+  # Phụ thuộc RabbitMQ (publish search events)
+  # ────────────────────────────────────────────────
+  job-service:
+    build:
+      context: ./backend/job-service
+      dockerfile: ../../Infrastructure/Docker-file/job-service.Dockerfile
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./backend/job-service:/app
+      - /app/node_modules
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - NODE_ENV=development
+      - PORT=3002
+      - RABBITMQ_URI=amqp://guest:guest@rabbitmq:5672
+    env_file:
+      - ./backend/job-service/.env  # MONGO_URI, JWT_SECRET
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    networks:
+      - supervision-net
+
+  # ────────────────────────────────────────────────
+  # Application Service — port 3003
+  # ────────────────────────────────────────────────
+  application-service:
+    build:
+      context: ./backend/application-service
+      dockerfile: ../../Infrastructure/Docker-file/application-service.Dockerfile
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./backend/application-service:/app
+      - /app/node_modules
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - NODE_ENV=development
+      - PORT=3003
+    env_file:
+      - ./backend/application-service/.env  # MONGO_URI, JWT_SECRET
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - supervision-net
+
+  # ────────────────────────────────────────────────
+  # Recommend Service — port 3004
+  # Worker subscribe queue recommend_queue từ RabbitMQ
+  # ────────────────────────────────────────────────
+  recommend-service:
+    build:
+      context: ./backend/recommend-service
+      dockerfile: ../../Infrastructure/Docker-file/recommend-service.Dockerfile
+    ports:
+      - "3004:3004"
+    volumes:
+      - ./backend/recommend-service:/app
+      - /app/node_modules
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - NODE_ENV=development
+      - PORT=3004
+      - RABBITMQ_URI=amqp://guest:guest@rabbitmq:5672
+    env_file:
+      - ./backend/recommend-service/.env  # MONGO_URI, JWT_SECRET
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3004/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    networks:
+      - supervision-net
+
+  # ────────────────────────────────────────────────
+  # API Gateway — port 3000
+  # Proxy tất cả request vào các service bên dưới
+  # Đợi tất cả service healthy trước khi start
+  # ────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: ../../Infrastructure/Docker-file/api-gateway.Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/api-gateway:/app
+      - /app/node_modules
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - NODE_ENV=development
+      - PORT=3000
+      - USER_SERVICE_URL=http://user-service:3001
+      - JOB_SERVICE_URL=http://job-service:3002
+      - APPLICATION_SERVICE_URL=http://application-service:3003
+      - RECOMMEND_SERVICE_URL=http://recommend-service:3004
+    env_file:
+      - ./backend/api-gateway/.env  # JWT_SECRET nếu gateway cần validate token
+    depends_on:
+      user-service:
+        condition: service_healthy
+      job-service:
+        condition: service_healthy
+      application-service:
+        condition: service_healthy
+      recommend-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - supervision-net
+
+  # ────────────────────────────────────────────────
+  # Frontend — port 5173
+  # React + Vite dev server (HMR enabled)
+  # VITE_API_URL trỏ vào api-gateway qua host
+  # ────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend/client
+      dockerfile: ../../Docker-file/frontend.Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/client:/app
+      - /app/node_modules
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - CHOKIDAR_USEPOLLING=true   # HMR polling trong Docker (Vite/Tailwind)
+    env_file:
+      - ./frontend/client/.env    # VITE_API_URL=http://localhost:3000
+    # Frontend không cần depends_on api-gateway vì browser gọi trực tiếp qua host port
+    networks:
+      - supervision-net

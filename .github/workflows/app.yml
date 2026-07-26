@@ -1,0 +1,121 @@
+name: Build, Push & Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  ACR_NAME: supervisionacr
+  ACR_LOGIN_SERVER: supervisionacr.azurecr.io
+  AKS_RESOURCE_GROUP: rg-supervision-dev
+  AKS_CLUSTER_NAME: supervision-aks
+  K8S_NAMESPACE: supervision-dev
+
+jobs:
+  # ─────────────────────────────────────────────
+  # JOB 1: Build & Push tất cả backend images lên ACR
+  # Dùng matrix để build 5 service song song
+  # ─────────────────────────────────────────────
+  build-backend:
+    name: Build & Push (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: api-gateway
+            context: Web/backend/api-gateway
+            dockerfile: Infrastructure/Docker-file/api-gateway.Dockerfile
+          - service: user-service
+            context: Web/backend/user-service
+            dockerfile: Infrastructure/Docker-file/user-service.Dockerfile
+          - service: job-service
+            context: Web/backend/job-service
+            dockerfile: Infrastructure/Docker-file/job-service.Dockerfile
+          - service: application-service
+            context: Web/backend/application-service
+            dockerfile: Infrastructure/Docker-file/application-service.Dockerfile
+          - service: recommend-service
+            context: Web/backend/recommend-service
+            dockerfile: Infrastructure/Docker-file/recommend-service.Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push image
+        run: |
+          IMAGE=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}
+          docker buildx build \
+            --platform linux/arm64 \
+            -f ${{ matrix.dockerfile }} \
+            -t $IMAGE:${{ github.sha }} \
+            -t $IMAGE:latest \
+            --push \
+            ${{ matrix.context }}
+
+  # ─────────────────────────────────────────────
+  # JOB 2: Deploy K8s manifests lên AKS
+  # Chạy sau khi tất cả build-backend hoàn thành
+  # ─────────────────────────────────────────────
+  deploy-aks:
+    name: Deploy to AKS
+    runs-on: ubuntu-latest
+    needs: build-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ env.AKS_RESOURCE_GROUP }} \
+            --name ${{ env.AKS_CLUSTER_NAME }} \
+            --overwrite-existing
+
+      - name: Apply K8s manifests
+        run: |
+          kubectl apply -f Infrastructure/k8s/namespace.yaml
+          kubectl apply -f Infrastructure/k8s/rbac.yaml
+          kubectl apply -f Infrastructure/k8s/configmap.yaml
+          kubectl apply -f Infrastructure/k8s/deployment.yaml
+          kubectl apply -f Infrastructure/k8s/service.yaml
+          kubectl apply -f Infrastructure/k8s/hpa.yaml
+          kubectl apply -f Infrastructure/k8s/networkpolicy.yaml
+          kubectl apply -f Infrastructure/k8s/ingress.yaml
+
+      # Cập nhật image tag sha để AKS rolling update đúng image mới
+      - name: Update image tags to current SHA
+        run: |
+          ACR=${{ env.ACR_LOGIN_SERVER }}
+          SHA=${{ github.sha }}
+          NS=${{ env.K8S_NAMESPACE }}
+          kubectl set image deployment/api-gateway       api-gateway=$ACR/api-gateway:$SHA           -n $NS
+          kubectl set image deployment/user-service      user-service=$ACR/user-service:$SHA         -n $NS
+          kubectl set image deployment/job-service       job-service=$ACR/job-service:$SHA           -n $NS
+          kubectl set image deployment/application-service application-service=$ACR/application-service:$SHA -n $NS
+          kubectl set image deployment/recommend-service recommend-service=$ACR/recommend-service:$SHA -n $NS
+
+      - name: Wait for rollout
+        run: |
+          NS=${{ env.K8S_NAMESPACE }}
+          kubectl rollout status deployment/api-gateway        -n $NS --timeout=120s
+          kubectl rollout status deployment/user-service       -n $NS --timeout=120s
+          kubectl rollout status deployment/job-service        -n $NS --timeout=120s
+          kubectl rollout status deployment/application-service -n $NS --timeout=120s
+          kubectl rollout status deployment/recommend-service  -n $NS --timeout=120s
