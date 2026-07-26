@@ -44,7 +44,7 @@ const HomePage = () => {
           const token = localStorage.getItem("access_token") || "";
           const userId = localStorage.getItem("user_id") || null;
 
-          const res = await axiosClient.get("/recommend/recommend", {
+          const res = await axiosClient.get("/recommend", {
             params: {
               page,
               limit: 6,
