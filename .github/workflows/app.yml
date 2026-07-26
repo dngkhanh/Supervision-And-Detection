@@ -5,13 +5,6 @@ on:
     branches:
       - main
 
-# ─── Secrets cần cấu hình trong GitHub → Settings → Secrets ───
-# AZURE_CREDENTIALS        : JSON từ lệnh az ad sp create-for-rbac (xem README)
-# AZURE_SUBSCRIPTION_ID    : ID subscription Azure của bạn
-# AZURE_STORAGE_ACCOUNT    : Tên storage account dùng cho Static Website (vd: supervisionwebsite)
-# VITE_API_URL             : URL public của API Gateway sau khi Ingress có IP (vd: https://api.yourdomain.com)
-# ─────────────────────────────────────────────────────────────
-
 env:
   ACR_NAME: supervisionacr
   ACR_LOGIN_SERVER: supervisionacr.azurecr.io
@@ -57,16 +50,19 @@ jobs:
       - name: Login ACR
         run: az acr login --name ${{ env.ACR_NAME }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build & Push image
         run: |
           IMAGE=${{ env.ACR_LOGIN_SERVER }}/${{ matrix.service }}
-          docker build \
+          docker buildx build \
+            --platform linux/arm64 \
             -f ${{ matrix.dockerfile }} \
             -t $IMAGE:${{ github.sha }} \
             -t $IMAGE:latest \
+            --push \
             ${{ matrix.context }}
-          docker push $IMAGE:${{ github.sha }}
-          docker push $IMAGE:latest
 
   # ─────────────────────────────────────────────
   # JOB 2: Deploy K8s manifests lên AKS
@@ -102,8 +98,6 @@ jobs:
           kubectl apply -f Infrastructure/k8s/hpa.yaml
           kubectl apply -f Infrastructure/k8s/networkpolicy.yaml
           kubectl apply -f Infrastructure/k8s/ingress.yaml
-        # Lưu ý: secret.yaml KHÔNG commit vào repo (gitignored).
-        # Tạo secret một lần thủ công: kubectl apply -f Infrastructure/k8s/secret.yaml
 
       # Cập nhật image tag sha để AKS rolling update đúng image mới
       - name: Update image tags to current SHA
@@ -125,70 +119,3 @@ jobs:
           kubectl rollout status deployment/job-service        -n $NS --timeout=120s
           kubectl rollout status deployment/application-service -n $NS --timeout=120s
           kubectl rollout status deployment/recommend-service  -n $NS --timeout=120s
-
-  # ─────────────────────────────────────────────
-  # JOB 3: Build React/Vite → upload lên Azure Storage Static Website
-  # Chạy song song với deploy-aks (độc lập với backend)
-  # ─────────────────────────────────────────────
-  deploy-frontend:
-    name: Deploy Frontend (Azure Static Website)
-    runs-on: ubuntu-latest
-    # Frontend không cần đợi backend build xong
-    # nhưng nếu muốn đồng bộ thì uncomment dòng dưới:
-    # needs: build-backend
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: Web/frontend/client/package-lock.json
-
-      - name: Install dependencies
-        working-directory: Web/frontend/client
-        run: npm ci
-
-      - name: Build Vite app
-        working-directory: Web/frontend/client
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-        run: npm run build
-
-      - name: Login Azure
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Upload to Azure Blob Static Website
-        run: |
-          az storage blob upload-batch \
-            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
-            --source Web/frontend/client/dist \
-            --destination '$web' \
-            --overwrite true
-
-      - name: Set Cache-Control cho assets tĩnh
-        run: |
-          # HTML không cache (luôn lấy version mới nhất)
-          az storage blob update \
-            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
-            --container-name '$web' \
-            --name 'index.html' \
-            --content-cache-control 'no-cache, no-store, must-revalidate' \
-            2>/dev/null || true
-          # Assets (JS/CSS có hash trong tên) cache dài
-          az storage blob list \
-            --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
-            --container-name '$web' \
-            --query "[?contains(name,'assets/')].name" -o tsv | \
-          while IFS= read -r blob; do
-            az storage blob update \
-              --account-name ${{ secrets.AZURE_STORAGE_ACCOUNT }} \
-              --container-name '$web' \
-              --name "$blob" \
-              --content-cache-control 'public, max-age=31536000, immutable' \
-              2>/dev/null || true
-          done
