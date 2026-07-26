@@ -1,7 +1,6 @@
 # ============================================================
 # api-gateway.Dockerfile
 # Node.js ESM — Express proxy
-# Production image: dùng node trực tiếp, không cần nodemon
 # ============================================================
 
 FROM node:20-alpine
@@ -21,5 +20,4 @@ COPY . .
 
 EXPOSE 3000
 
-# Production: chạy trực tiếp bằng node, không dùng nodemon
 CMD ["node", "index.js"]

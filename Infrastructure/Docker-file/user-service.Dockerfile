@@ -1,7 +1,6 @@
 # ============================================================
 # user-service.Dockerfile
 # Node.js ESM — Express + Mongoose
-# Production image: dùng node trực tiếp, không cần nodemon
 # ============================================================
 
 FROM node:20-alpine
@@ -21,5 +20,4 @@ COPY . .
 
 EXPOSE 3001
 
-# Production: chạy trực tiếp bằng node, không dùng nodemon
 CMD ["node", "src/index.js"]

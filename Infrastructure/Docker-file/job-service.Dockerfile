@@ -1,7 +1,6 @@
 # ============================================================
 # job-service.Dockerfile
 # Node.js ESM — Express + Mongoose + RabbitMQ (amqplib)
-# Production image: dùng node trực tiếp, không cần nodemon
 # ============================================================
 
 FROM node:20-alpine
@@ -21,5 +20,4 @@ COPY . .
 
 EXPOSE 3002
 
-# Production: chạy trực tiếp bằng node, không dùng nodemon
 CMD ["node", "src/index.js"]
