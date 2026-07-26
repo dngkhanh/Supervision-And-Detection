@@ -24,9 +24,9 @@ variable "dns_prefix" {
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes version for AKS cluster"
+  description = "Kubernetes version for AKS cluster (null = Azure auto-select stable version)"
   type        = string
-  default     = "1.31"
+  default     = null
 }
 
 variable "fixed_node_count" {
@@ -35,12 +35,20 @@ variable "fixed_node_count" {
 }
 
 variable "fixed_vm_size" {
-  description = "VM size of fixed pool"
+  description = <<-EOT
+    VM size of fixed pool. 
+    Standard_B2s (2 vCPU, 4GB RAM): sufficient for monitoring stack + system pods.
+    Upgrade to Standard_B2ms (2 vCPU, 8GB RAM) if planning to run databases in-cluster.
+  EOT
   type        = string
 }
 
 variable "scalable_vm_size" {
-  description = "VM size of scalable pool"
+  description = <<-EOT
+    VM size of scalable pool.
+    Standard_B2s (2 vCPU, 4GB RAM): OK for lightweight backend services.
+    Standard_B2ms (2 vCPU, 8GB RAM): better for services with high memory usage.
+  EOT
   type        = string
 }
 
@@ -52,4 +60,14 @@ variable "scalable_min_count" {
 variable "scalable_max_count" {
   description = "Max nodes of scalable pool"
   type        = number
+}
+
+variable "common_tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default     = {
+    Environment = "Development"
+    Project     = "Supervision"
+    ManagedBy   = "Terraform"
+  }
 }
