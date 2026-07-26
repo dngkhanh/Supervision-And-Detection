@@ -1,0 +1,83 @@
+# ============================================================
+# Helm Values for kube-prometheus-stack
+# Chart: prometheus-community/kube-prometheus-stack
+# ============================================================
+
+# Prometheus configuration
+prometheus:
+  prometheusSpec:
+    # Data retention duration
+    retention: 7d
+    
+    # Persistent storage for Prometheus data
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+    
+    # Resource requests/limits
+    resources:
+      requests:
+        cpu: 200m
+        memory: 400Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+# Grafana configuration
+grafana:
+  # Admin credentials
+  adminPassword: admin123   # ⚠️ Change this in production
+  
+  # Expose Grafana via LoadBalancer
+  service:
+    type: LoadBalancer
+    port: 80
+  
+  # Resource requests/limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  
+  # Persistence for Grafana dashboards
+  persistence:
+    enabled: true
+    size: 1Gi
+
+# Alertmanager configuration
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 50Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+# Node Exporter (enabled by default)
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 30Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# Kube State Metrics (enabled by default)
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
