@@ -33,7 +33,7 @@ const HomePage = () => {
       try {
         const token = localStorage.getItem("access_token") || "";
         if (isSearching) {
-          const res = await axiosClient.get("/job/job/search", {
+          const res = await axiosClient.get("/job/search", {
             params: { q: searchQ || undefined, province: searchProvince || undefined, page, limit: 6, ts: Date.now() },
             headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           });
@@ -44,7 +44,7 @@ const HomePage = () => {
           const token = localStorage.getItem("access_token") || "";
           const userId = localStorage.getItem("user_id") || null;
 
-          const res = await axiosClient.get("/recommend/recommend/recommend", {
+          const res = await axiosClient.get("/recommend/recommend", {
             params: {
               page,
               limit: 6,
@@ -87,7 +87,7 @@ const HomePage = () => {
       const q = (qOverride ?? searchQ) || undefined;
       const province = (provinceOverride ?? searchProvince) || undefined;
 
-      const res = await axiosClient.get("/job/job/search", {
+      const res = await axiosClient.get("/job/search", {
         params: {
           q,
           province,

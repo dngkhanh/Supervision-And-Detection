@@ -47,7 +47,7 @@ const AdminJobs = () => {
         params.status = statusFilter;
       }
 
-      const res = await axiosClient.get("/job/job/admin/jobs", { params });
+      const res = await axiosClient.get("/job/admin/jobs", { params });
 
       if (res.data && res.data.success) {
         setJobs(res.data.data || []);
@@ -101,7 +101,7 @@ const AdminJobs = () => {
   const handleApprove = async (jobId) => {
     try {
       setActionLoading(true);
-      const res = await axiosClient.post("/job/job/accept", { job_id: jobId });
+      const res = await axiosClient.post("/job/accept", { job_id: jobId });
       showToast(res.data?.message || "Duyệt bài đăng thành công!", "success");
       fetchJobs();
     } catch (err) {
@@ -133,7 +133,7 @@ const AdminJobs = () => {
     try {
       setActionLoading(true);
       setActionError("");
-      const res = await axiosClient.post("/job/job/refuse", {
+      const res = await axiosClient.post("/job/refuse", {
         job_id: refuseModal.jobId,
         reason: refuseModal.reason
       });

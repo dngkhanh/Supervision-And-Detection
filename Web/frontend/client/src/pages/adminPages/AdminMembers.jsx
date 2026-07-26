@@ -36,7 +36,7 @@ const AdminMembers = () => {
         params.status = statusFilter;
       }
 
-      const res = await axiosClient.get("/user/user/admin/users", { params });
+      const res = await axiosClient.get("/user/admin/users", { params });
 
       if (res.data && res.data.success) {
         setUsers(res.data.data || []);
@@ -96,7 +96,7 @@ const AdminMembers = () => {
     try {
       setActionLoading(true);
       setActionError("");
-      const res = await axiosClient.put(`/user/user/admin/users/${banModal.userId}/ban`, {
+      const res = await axiosClient.put(`/user/admin/users/${banModal.userId}/ban`, {
         reason: banModal.reason,
       });
       if (res.data && res.data.success) {
@@ -122,7 +122,7 @@ const AdminMembers = () => {
     try {
       setActionLoading(true);
       setActionError("");
-      const res = await axiosClient.put(`/user/user/admin/users/${unbanModal.userId}/unban`);
+      const res = await axiosClient.put(`/user/admin/users/${unbanModal.userId}/unban`);
       if (res.data && res.data.success) {
         setUnbanModal({ show: false, userId: null, username: "" });
         fetchUsers();
@@ -146,7 +146,7 @@ const AdminMembers = () => {
     try {
       setActionLoading(true);
       setActionError("");
-      const res = await axiosClient.delete(`/user/user/admin/users/${deleteModal.userId}`);
+      const res = await axiosClient.delete(`/user/admin/users/${deleteModal.userId}`);
       if (res.data && res.data.success) {
         setDeleteModal({ show: false, userId: null, username: "" });
         fetchUsers();

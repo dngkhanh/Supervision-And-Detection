@@ -39,7 +39,7 @@ const JobDetail = () => {
 
   useEffect(() => {
     if (job?.post_user_id) {
-      axiosClient.get(`/user/user/info/${job.post_user_id}`)
+      axiosClient.get(`/user/info/${job.post_user_id}`)
         .then(res => {
           setPosterName(res.data?.data?.full_name || "Nhà tuyển dụng");
           setPosterUsername(res.data?.data?.username || "");
@@ -105,7 +105,7 @@ const JobDetail = () => {
   useEffect(() => {
     const fetchMe = async () => {
       try {
-        const res = await axiosClient.get('/user/user/me');
+        const res = await axiosClient.get('/user/me');
         setCurrentUserId(res.data.user.user_id);
         setCurrentUserRoleId(res.data.user.role_id); // <-- lấy role_id
       } catch {
@@ -122,9 +122,9 @@ const JobDetail = () => {
       setLoading(true);
       try {
         const [jobRes, checkRes] = await Promise.all([
-          axiosClient.get(`/job/job/${id}`),
+          axiosClient.get(`/job/${id}`),
           axiosClient
-            .get(`/application/application/check-applied/${id}`)
+            .get(`/application/check-applied/${id}`)
             .catch(() => ({ data: { applied: false } })),
         ]);
 
@@ -151,7 +151,7 @@ const JobDetail = () => {
 
     if (currentUserId === job.post_user_id) {
       axiosClient
-        .get(`/application/application/applier-cv/${id}`)
+        .get(`/application/applier-cv/${id}`)
         .then((res) => {
           setApplicantCount(res.data.count || 0);
           setCvList(res.data.data || []);
@@ -186,13 +186,13 @@ const JobDetail = () => {
       const formData = new FormData();
       formData.append('cv', selectedCvFile);
 
-      const uploadRes = await axiosClient.post('/user/user/upload-file', formData, {
+      const uploadRes = await axiosClient.post('/user/upload-file', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       const uploadData = uploadRes.data;
 
       // 2. Gọi API ứng tuyển
-      await axiosClient.post('/application/application/apply', {
+      await axiosClient.post('/application/apply', {
         job_id: id,
         cv_path: uploadData.url,
         original_filename: uploadData.original_filename
@@ -215,7 +215,7 @@ const JobDetail = () => {
 
     setIsApplying(true);
     try {
-      await axiosClient.delete('/application/application/cancel-applied', {
+      await axiosClient.delete('/application/cancel-applied', {
         data: { job_id: id },
       });
       alert('Đã hủy ứng tuyển.');
@@ -240,7 +240,7 @@ const JobDetail = () => {
 
     try {
       // 1. Gửi request lấy file ZIP
-      const response = await axiosClient.post('/application/application/download-zip', {
+      const response = await axiosClient.post('/application/download-zip', {
         cvs: cvsToDownload
       }, {
         responseType: 'blob' // Trả về dạng Binary
@@ -266,7 +266,7 @@ const JobDetail = () => {
 
       // 4. Gửi thông báo cho từng ứng viên (chạy ngầm không cần chờ)
       cvsToDownload.forEach(cv => {
-        axiosClient.post('/user/user/notification', {
+        axiosClient.post('/user/notification', {
           user_id: cv.user_id,
           message: `CV của bạn ứng tuyển vào vị trí "${job?.title || 'một công việc'}" đã được nhà tuyển dụng tải về.`
         }).catch(err => console.error("Lỗi báo cáo tải CV:", err));
@@ -289,7 +289,7 @@ const JobDetail = () => {
     try {
       const token = localStorage.getItem('accessToken');
       await axiosClient.post(
-        '/job/job/accept',
+        '/job/accept',
         { job_id: id },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -326,7 +326,7 @@ const JobDetail = () => {
     try {
       const token = localStorage.getItem('accessToken');
       await axiosClient.post(
-        '/job/job/refuse',
+        '/job/refuse',
         { job_id: id, reason },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -356,10 +356,10 @@ const JobDetail = () => {
     try {
       if (action === 'delete') {
         if (!window.confirm('Bạn có chắc muốn ẩn công việc này?')) return;
-        await axiosClient.put(`/job/job/${id}/soft-delete`);
+        await axiosClient.put(`/job/${id}/soft-delete`);
         setJob(prev => ({ ...prev, status: 'deleted' }));
       } else if (action === 'restore') {
-        await axiosClient.put(`/job/job/${id}/restore`);
+        await axiosClient.put(`/job/${id}/restore`);
         setJob(prev => ({ ...prev, status: 'available' }));
       }
     } catch (err) {

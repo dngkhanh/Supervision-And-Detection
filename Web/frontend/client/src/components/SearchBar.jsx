@@ -59,7 +59,7 @@ const handleSearchSubmit = async ({ q, province, token }) => {
 const fetchSearchPage = async (nextPage = 1, token) => {
   setLoading(true);
   try {
-    const res = await axiosClient.get("/job/job/search", {
+    const res = await axiosClient.get("/job/search", {
       params: { q: searchQ || undefined, province: searchProvince || undefined, page: nextPage, limit: 6 },
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });

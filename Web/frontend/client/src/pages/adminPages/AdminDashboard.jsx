@@ -14,7 +14,7 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
       setError("");
-      const res = await axiosClient.get("/job/job/admin/stats");
+      const res = await axiosClient.get("/job/admin/stats");
       if (res.data && res.data.success) {
         setStats(res.data.data);
       } else {

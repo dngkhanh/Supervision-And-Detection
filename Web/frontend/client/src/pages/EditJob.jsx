@@ -171,7 +171,7 @@ const EditJob = () => {
 
   useEffect(() => {
     if (id) {
-      axiosClient.get(`/job/job/${id}`)
+      axiosClient.get(`/job/${id}`)
         .then(async (res) => {
           const job = res.data.data || res.data;
           
@@ -311,7 +311,7 @@ const EditJob = () => {
         const formData = new FormData();
         formData.append("image", logoFile);
 
-        const uploadRes = await axiosClient.post("/user/user/upload-image", formData, {
+        const uploadRes = await axiosClient.post("/user/upload-image", formData, {
           headers: { "Content-Type": "multipart/form-data" }
         });
 
@@ -339,7 +339,7 @@ const EditJob = () => {
         categories: form.categories
       };
 
-      const res = await axiosClient.put(`/job/job/${id}`, payload);
+      const res = await axiosClient.put(`/job/${id}`, payload);
       setMessage("Cập nhật việc thành công!");
     } catch (err) {
       console.error(err);
