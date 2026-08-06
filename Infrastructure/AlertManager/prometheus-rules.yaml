@@ -1,0 +1,45 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: supervision-prometheus-rules
+  namespace: monitoring
+  labels:
+    # Label 'release' này phải trùng với tên Helm release (monitoring)
+    # để Prometheus Operator nhận diện và nạp rule này
+    release: monitoring
+spec:
+  groups:
+  - name: supervision-dev-alerts
+    rules:
+
+    # -------------------------------------------------------------
+    # RULE 1: Cảnh báo Pod bị quá tải CPU (Gửi đích danh tên Pod)
+    # -------------------------------------------------------------
+    - alert: HighCpuUsage
+      # Cấu hình PromQL: Tính CPU usage rate của từng Pod trong namespace supervision-dev
+      # Ngưỡng > 0.48 (48%) được đặt để dễ dàng trigger khi test lệnh 'ab'
+      expr: |
+        sum(rate(container_cpu_usage_seconds_total{namespace="supervision-dev", container!=""}[1m])) 
+        by (pod, namespace) > 0.48
+      for: 1m # Phải duy trì quá tải liên tục 1 phút để tránh nhiễu
+      labels:
+        severity: critical
+      annotations:
+        summary: "🔥 CẢNH BÁO: Pod {{ $labels.pod }} đang bị quá tải CPU (>80%)!"
+        description: "Pod {{ $labels.pod }} thuộc namespace {{ $labels.namespace }} đang sử dụng CPU vượt ngưỡng cho phép."
+
+    # -------------------------------------------------------------
+    # RULE 2: Cảnh báo HPA Scale kịch trần (Max Replicas)
+    # -------------------------------------------------------------
+    - alert: HPAReachedMaxReplicas
+      # Cấu hình PromQL: Kiểm tra số Pod hiện tại có bằng maxReplicas (2 Pod) trong hpa.yaml không
+      expr: |
+        kube_horizontalpodautoscaler_status_current_replicas{namespace="supervision-dev"} 
+        == 
+        kube_horizontalpodautoscaler_spec_max_replicas{namespace="supervision-dev"}
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: "⚠️ CẢNH BÁO: HPA {{ $labels.horizontalpodautoscaler }} đã scale kịch trần!"
+        description: "HPA {{ $labels.horizontalpodautoscaler }} đã tự động scale đạt số lượng Pod tối đa (maxReplicas) nhưng tải vẫn chưa giảm."

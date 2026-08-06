@@ -1,0 +1,60 @@
+global:
+  resolve_timeout: 5m
+
+inhibit_rules:
+- equal:
+  - namespace
+  - alertname
+  source_matchers:
+  - severity = critical
+  target_matchers:
+  - severity =~ warning|info
+- equal:
+  - namespace
+  - alertname
+  source_matchers:
+  - severity = warning
+  target_matchers:
+  - severity = info
+- equal:
+  - namespace
+  source_matchers:
+  - alertname = InfoInhibitor
+  target_matchers:
+  - severity = info
+- target_matchers:
+  - alertname = InfoInhibitor
+
+receivers:
+- name: "null"
+- name: "telegram-alerts" # Thêm Telegram của bạn vào đây
+  telegram_configs:
+  - bot_token: '8377364549:AAH91sAzQ2WXlu6NJiE-Db8NfdZIgbWvcEM' # THAY TOKEN CỦA BẠN VÀO ĐÂY
+    chat_id: 5460777500               # THAY CHAT ID CỦA BẠN VÀO ĐÂY
+    parse_mode: 'HTML'
+    message: |-
+      🚨 <b>CẢNH BÁO TỪ HỆ THỐNG AKS</b> 🚨
+      <b>Trạng thái:</b> {{ if eq .Status "firing" }}🔥 ĐANG LỖI{{ else }}✅ ĐÃ PHỤC HỒI{{ end }}
+      <b>Số lượng:</b> {{ .Alerts | len }} cảnh báo
+      ------------------------------------
+      {{ range .Alerts }}
+      ⚠️ <b>Tên lỗi:</b> {{ .Labels.alertname }}
+      Namespace: {{ .Labels.namespace }}
+      Chi tiết: {{ .Annotations.summary }}
+      {{ end }}
+
+route:
+  group_by:
+  - namespace
+  - alertname
+  group_interval: 5m
+  group_wait: 30s
+  repeat_interval: 1h
+  receiver: "telegram-alerts" # Đổi receiver mặc định thành telegram
+  routes:
+  - matchers:
+    - alertname = "Watchdog"
+    receiver: "null" # Chặn thằng Watchdog ném vào thùng rác null
+
+templates:
+- /etc/alertmanager/config/*.tmpl
