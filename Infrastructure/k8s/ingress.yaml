@@ -20,21 +20,31 @@ kind: Ingress
 metadata:
   name: supervision-ingress
   namespace: supervision-dev
+
   labels:
     environment: azure
+
   annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
-    # HTTPS redirect — bỏ comment nếu chưa có TLS
-    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
 spec:
   ingressClassName: nginx
+
+  tls:
+  - hosts:
+    - supervision.135.171.160.56.nip.io
+    secretName: supervision-tls
+
   rules:
   - host: supervision.135.171.160.56.nip.io
     http:
       paths:
-      # Tất cả traffic → api-gateway, gateway tự route đến service phù hợp.
       - path: /
         pathType: Prefix
         backend:
@@ -42,8 +52,3 @@ spec:
             name: api-gateway
             port:
               number: 3000
-  # TLS: bỏ comment sau khi có cert
-  # tls:
-  # - hosts:
-  #   - supervision.<EXTERNAL-IP>.nip.io
-  #   secretName: supervision-tls-secret
