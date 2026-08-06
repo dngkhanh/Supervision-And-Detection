@@ -148,7 +148,7 @@ spec:
       port: 3004
 
 ---
-# --- 7. Egress: job-service → RabbitMQ Cloud + MongoDB Atlas ---
+# --- 7. Egress: job-service → các service nội bộ + RabbitMQ Cloud + MongoDB Atlas ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -163,6 +163,10 @@ spec:
   egress:
   - ports:
     - protocol: TCP
+      port: 3001   # user-service
+    - protocol: TCP
+      port: 3003   # application-service
+    - protocol: TCP
       port: 5671   # AMQPS (SSL) — CloudAMQP
     - protocol: TCP
       port: 5672   # AMQP (fallback)
@@ -176,7 +180,7 @@ spec:
       port: 53
 
 ---
-# --- 8. Egress: recommend-service → RabbitMQ Cloud + MongoDB Atlas ---
+# --- 8. Egress: recommend-service → job-service nội bộ + RabbitMQ Cloud + MongoDB Atlas ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -191,9 +195,67 @@ spec:
   egress:
   - ports:
     - protocol: TCP
+      port: 3002   # job-service
+    - protocol: TCP
       port: 5671   # AMQPS (SSL)
     - protocol: TCP
       port: 5672   # AMQP (fallback)
+    - protocol: TCP
+      port: 27017  # MongoDB Atlas
+  # DNS resolution
+  - ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# --- 10. Egress: application-service → user-service + job-service nội bộ + MongoDB Atlas ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-application-egress
+  namespace: supervision-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: application-service
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 3001   # user-service
+    - protocol: TCP
+      port: 3002   # job-service
+    - protocol: TCP
+      port: 27017  # MongoDB Atlas
+  # DNS resolution
+  - ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# --- 11. Egress: user-service → job-service + application-service nội bộ + MongoDB Atlas ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-user-egress
+  namespace: supervision-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: user-service
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 3002   # job-service
+    - protocol: TCP
+      port: 3003   # application-service
     - protocol: TCP
       port: 27017  # MongoDB Atlas
   # DNS resolution

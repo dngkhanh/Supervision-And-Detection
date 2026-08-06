@@ -29,8 +29,8 @@ receivers:
 - name: "null"
 - name: "telegram-alerts" # Thêm Telegram của bạn vào đây
   telegram_configs:
-  - bot_token: '8377364549:AAH91sAzQ2WXlu6NJiE-Db8NfdZIgbWvcEM' # THAY TOKEN CỦA BẠN VÀO ĐÂY
-    chat_id: 5460777500               # THAY CHAT ID CỦA BẠN VÀO ĐÂY
+  - bot_token: '123456789' # THAY TOKEN CỦA BẠN VÀO ĐÂY
+    chat_id: 0000777500               # THAY CHAT ID CỦA BẠN VÀO ĐÂY
     parse_mode: 'HTML'
     message: |-
       🚨 <b>CẢNH BÁO TỪ HỆ THỐNG AKS</b> 🚨
